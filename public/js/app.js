@@ -110,8 +110,7 @@
   // ── Tyre temperature → colour class ──────────────────────────────────────
   // Optimal F1 tyre window ≈ 80–105 °C
   function tyreClass(temp) {
-    if (temp < 60)  return 'tyre-cold';   // Too cold – blue
-    if (temp < 80)  return 'tyre-cold';   // Below optimal window – still cold
+    if (temp < 80)  return 'tyre-cold';   // Below optimal window (includes < 60)
     if (temp < 90)  return 'tyre-ok';     // Optimal range – green
     if (temp < 100) return 'tyre-warm';   // Upper optimal – yellow
     if (temp < 110) return 'tyre-hot';    // Overheating – orange
@@ -354,18 +353,16 @@
   socket.on('disconnect', () => setConnected('off'));
 
   socket.on('init',         handleInit);
-  socket.on('session',      (d) => { window.__totalLaps = d.totalLaps; handleSession(d); });
+  socket.on('session',      (d) => {
+    window.__totalLaps = d.totalLaps;
+    handleSession(d);
+    if (d._demo) setConnected('demo');
+  });
   socket.on('lapData',      handleLapData);
   socket.on('carTelemetry', handleTelemetry);
   socket.on('carStatus',    handleStatus);
   socket.on('motion',       handleMotion);
   socket.on('trackTrace',   handleTrackTrace);
-
-  // If backend is running in demo mode, receive the demo marker via the
-  // session event (trackId = 11 = Monza is the simulator's choice)
-  socket.on('session', (d) => {
-    if (d._demo) setConnected('demo');
-  });
 
   // ── Canvas init ────────────────────────────────────────────────────────────
   CircuitMap.init(document.getElementById('circuit-canvas'));
