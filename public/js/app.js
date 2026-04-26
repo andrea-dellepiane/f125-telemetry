@@ -108,13 +108,14 @@
   }
 
   // ── Tyre temperature → colour class ──────────────────────────────────────
+  // Optimal F1 tyre window ≈ 80–105 °C
   function tyreClass(temp) {
-    if (temp < 60)  return 'tyre-cold';
-    if (temp < 80)  return 'tyre-cold';
-    if (temp < 90)  return 'tyre-ok';
-    if (temp < 100) return 'tyre-warm';
-    if (temp < 110) return 'tyre-hot';
-    return 'tyre-danger';
+    if (temp < 60)  return 'tyre-cold';   // Too cold – blue
+    if (temp < 80)  return 'tyre-cold';   // Below optimal window – still cold
+    if (temp < 90)  return 'tyre-ok';     // Optimal range – green
+    if (temp < 100) return 'tyre-warm';   // Upper optimal – yellow
+    if (temp < 110) return 'tyre-hot';    // Overheating – orange
+    return 'tyre-danger';                 // Critical – red
   }
 
   function updateTyreCircle(circleId, temp) {

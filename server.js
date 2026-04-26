@@ -19,10 +19,6 @@ const io     = new Server(server, { cors: { origin: '*' } });
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.get('/', (_req, res) =>
-  res.sendFile(path.join(__dirname, 'public', 'index.html'))
-);
-
 /** Snapshot of the full application state (useful for initial page load) */
 app.get('/api/state', (_req, res) => res.json(getState()));
 
