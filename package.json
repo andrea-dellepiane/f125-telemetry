@@ -1,0 +1,17 @@
+{
+  "name": "f125-telemetry",
+  "version": "1.0.0",
+  "description": "F1 2025 Telemetry Dashboard – receives UDP data from the F1 25 game and displays it in a real-time web dashboard",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "demo": "node server.js --demo"
+  },
+  "keywords": ["f1", "telemetry", "udp", "dashboard", "formula1"],
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  }
+}
