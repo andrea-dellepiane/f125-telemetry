@@ -99,6 +99,12 @@ let state = {
   // Accumulates world positions to build track layout on canvas
   trackTrace: [],
 
+  // All 20 drivers – name, team, race number
+  participants: [],
+
+  // Per-car lap data (positions, gaps, penalties, pit status…)
+  allLapData: [],
+
   connected: false,
   lastUpdated: null,
 };
@@ -151,6 +157,14 @@ function updateState(result) {
       }
       break;
     }
+
+    case 'participants':
+      state.participants = result.data.participants || [];
+      break;
+
+    case 'allLapData':
+      state.allLapData = result.data.cars || [];
+      break;
 
     default:
       break;

@@ -1,34 +1,41 @@
 'use strict';
 /**
- * Circuit canvas – renders the accumulated track trace and all car positions.
- *
- * Exported to window.CircuitMap and called from app.js.
+ * Circuit canvas – renders the F1 track map with:
+ * - Predefined circuit layout (when track is known)
+ * - Live telemetry trace overlay
+ * - All car positions with team colours
+ * - Start/finish line, sector markers
  */
 (function () {
 
-  const TRACK_COLOUR     = '#2a3a5a';
-  const TRACE_COLOUR     = '#3b6ea5';
-  const PLAYER_COLOUR    = '#e10600';
-  const RIVAL_COLOUR     = '#888';
-  const PLAYER_RADIUS    = 6;
-  const RIVAL_RADIUS     = 3;
-  const PADDING          = 24;     // canvas pixels of padding around the trace
-  const TRACE_HISTORY    = 15000;  // max points kept
+  const TRACK_WIDTH      = 14;  // px for track outline
+  const TRACE_WIDTH      = 4;   // px for live racing line
+  const PLAYER_RADIUS    = 7;
+  const RIVAL_RADIUS     = 4;
+  const PADDING          = 32;
+  const TRACE_HISTORY    = 15000;
 
-  let canvas = null;
-  let ctx    = null;
+  // Team colour lookup (carIndex → CSS colour)
+  const TEAM_COLOURS = {};
+  const PARTICIPANTS = {};
 
-  // Raw world-coordinate arrays
-  let trace   = [];   // {x, z}[] – full track outline built up over time
-  let allCars = [];   // {carIndex, x, z}[]
-  let playerX = null;
-  let playerZ = null;
+  let canvas   = null;
+  let ctx      = null;
+  let trackId  = -1;
 
-  // Derived bounding box (world coords) – recomputed when trace changes
-  let bb = { minX: -1, maxX: 1, minZ: -1, maxZ: 1 };
-  let bbDirty = true;
+  // Predefined circuit points (from circuits-data.js)
+  let predefPts = null;
 
-  // ── Initialise ──────────────────────────────────────────────────────────
+  // Live trace (accumulated GPS points)
+  let trace     = [];
+  let allCars   = [];
+  let playerX   = null;
+  let playerZ   = null;
+
+  let bb        = { minX: -600, maxX: 600, minZ: -350, maxZ: 350 };
+  let bbDirty   = true;
+
+  // ── Init ─────────────────────────────────────────────────────────────────
   function init(canvasEl) {
     canvas = canvasEl;
     ctx    = canvas.getContext('2d');
@@ -40,15 +47,16 @@
   function onResize() {
     if (!canvas) return;
     const wrap = canvas.parentElement;
-    canvas.width  = wrap.clientWidth  || 300;
-    canvas.height = wrap.clientHeight || 400;
+    canvas.width  = wrap.clientWidth  || 400;
+    canvas.height = wrap.clientHeight || 480;
+    bbDirty = true;
   }
 
-  // ── Public API ──────────────────────────────────────────────────────────
+  // ── Public API ───────────────────────────────────────────────────────────
   function updateTrace(points) {
     if (!Array.isArray(points)) return;
-    trace    = points;
-    bbDirty  = true;
+    trace   = points;
+    bbDirty = true;
   }
 
   function updateCars(player, rivals) {
@@ -56,125 +64,184 @@
     if (rivals)   allCars = rivals;
   }
 
-  // ── Bounding box ────────────────────────────────────────────────────────
-  function recomputeBB() {
-    if (!bbDirty || trace.length < 2) return;
+  function setTrackId(id) {
+    if (id === trackId) return;
+    trackId   = id;
+    predefPts = null;
+    trace     = [];  // reset trace when changing track
+    bbDirty   = true;
+
+    if (window.F1CircuitData) {
+      predefPts = window.F1CircuitData[id] || window.F1CircuitData._fallback;
+      bbDirty   = true;
+    }
+  }
+
+  function setParticipants(participants) {
+    if (!Array.isArray(participants)) return;
+    participants.forEach(p => {
+      PARTICIPANTS[p.carIndex] = p;
+      TEAM_COLOURS[p.carIndex] = p.teamColor || '#888';
+    });
+  }
+
+  // ── Bounding box ─────────────────────────────────────────────────────────
+  function computeBB(pts) {
+    if (!pts || pts.length < 2) return;
     let minX = Infinity, maxX = -Infinity;
     let minZ = Infinity, maxZ = -Infinity;
-    for (const p of trace) {
+    for (const p of pts) {
       if (p.x < minX) minX = p.x;
       if (p.x > maxX) maxX = p.x;
       if (p.z < minZ) minZ = p.z;
       if (p.z > maxZ) maxZ = p.z;
     }
-    const margin = 50;
-    bb = { minX: minX - margin, maxX: maxX + margin,
-           minZ: minZ - margin, maxZ: maxZ + margin };
+    const marginX = (maxX - minX) * 0.08 + 30;
+    const marginZ = (maxZ - minZ) * 0.08 + 30;
+    bb = { minX: minX - marginX, maxX: maxX + marginX,
+           minZ: minZ - marginZ, maxZ: maxZ + marginZ };
     bbDirty = false;
   }
 
-  // Convert world coords → canvas pixels (auto-scaled & centred)
-  function worldToCanvas(wx, wz) {
-    const scaleX = (canvas.width  - PADDING * 2) / (bb.maxX - bb.minX);
-    const scaleZ = (canvas.height - PADDING * 2) / (bb.maxZ - bb.minZ);
-    const scale  = Math.min(scaleX, scaleZ);
-
-    // Centre the track on the canvas
-    const cxOff = (canvas.width  - (bb.maxX - bb.minX) * scale) / 2;
-    const czOff = (canvas.height - (bb.maxZ - bb.minZ) * scale) / 2;
-
-    const cx = cxOff + (wx - bb.minX) * scale;
-    const cz = czOff + (wz - bb.minZ) * scale;
-    return { cx, cz };
+  function recomputeBB() {
+    if (!bbDirty) return;
+    const activePts = predefPts || (trace.length >= 2 ? trace : null);
+    if (activePts) computeBB(activePts);
+    else bbDirty = false;
   }
 
-  // ── Draw ────────────────────────────────────────────────────────────────
+  // World → canvas
+  function w2c(wx, wz) {
+    const W = canvas.width, H = canvas.height;
+    const scaleX = (W - PADDING * 2) / (bb.maxX - bb.minX);
+    const scaleZ = (H - PADDING * 2) / (bb.maxZ - bb.minZ);
+    const scale  = Math.min(scaleX, scaleZ);
+    const cxOff  = (W - (bb.maxX - bb.minX) * scale) / 2;
+    const czOff  = (H - (bb.maxZ - bb.minZ) * scale) / 2;
+    return {
+      cx: cxOff + (wx - bb.minX) * scale,
+      cy: czOff + (wz - bb.minZ) * scale,
+    };
+  }
+
+  // ── Draw ─────────────────────────────────────────────────────────────────
   function drawLoop() {
     requestAnimationFrame(drawLoop);
     draw();
   }
 
-  function draw() {
-    const W = canvas.width;
-    const H = canvas.height;
-
-    ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = '#0a0a14';
-    ctx.fillRect(0, 0, W, H);
-
-    if (trace.length < 2) {
-      // Nothing accumulated yet – show placeholder text
-      ctx.fillStyle = '#2a2a3e';
-      ctx.font = '12px "Segoe UI", sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('Waiting for telemetry data…', W / 2, H / 2);
-      return;
-    }
-
-    recomputeBB();
-
-    // ── Draw track outline (wide grey stroke behind) ──────────────────────
+  function drawPath(pts, lineWidth, strokeStyle, lineDash) {
+    if (!pts || pts.length < 2) return;
     ctx.beginPath();
-    {
-      const { cx, cz } = worldToCanvas(trace[0].x, trace[0].z);
-      ctx.moveTo(cx, cz);
+    ctx.setLineDash(lineDash || []);
+    const { cx, cy } = w2c(pts[0].x, pts[0].z);
+    ctx.moveTo(cx, cy);
+    for (let i = 1; i < pts.length; i++) {
+      const p = w2c(pts[i].x, pts[i].z);
+      ctx.lineTo(p.cx, p.cy);
     }
-    for (let i = 1; i < trace.length; i++) {
-      const { cx, cz } = worldToCanvas(trace[i].x, trace[i].z);
-      ctx.lineTo(cx, cz);
-    }
-    ctx.strokeStyle = TRACK_COLOUR;
-    ctx.lineWidth   = 12;
+    ctx.strokeStyle = strokeStyle;
+    ctx.lineWidth   = lineWidth;
     ctx.lineCap     = 'round';
     ctx.lineJoin    = 'round';
     ctx.stroke();
+    ctx.setLineDash([]);
+  }
 
-    // ── Draw racing line (thin coloured line on top) ───────────────────────
-    ctx.beginPath();
-    {
-      const { cx, cz } = worldToCanvas(trace[0].x, trace[0].z);
-      ctx.moveTo(cx, cz);
-    }
-    for (let i = 1; i < trace.length; i++) {
-      const { cx, cz } = worldToCanvas(trace[i].x, trace[i].z);
-      ctx.lineTo(cx, cz);
-    }
-    ctx.strokeStyle = TRACE_COLOUR;
-    ctx.lineWidth   = 3;
-    ctx.stroke();
+  function draw() {
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
 
-    // ── Draw rival cars ───────────────────────────────────────────────────
-    for (const car of allCars) {
-      const { cx, cz } = worldToCanvas(car.x, car.z);
+    // Background
+    ctx.fillStyle = '#070710';
+    ctx.fillRect(0, 0, W, H);
+
+    recomputeBB();
+
+    const hasPts = predefPts || trace.length >= 2;
+
+    if (!hasPts) {
+      ctx.fillStyle = '#2a2a4a';
+      ctx.font = '13px "Segoe UI", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('In attesa dei dati telemetrici…', W / 2, H / 2);
+      return;
+    }
+
+    // ── Track outline (predefined or live trace) ──────────────────────────
+    const basePts = predefPts || trace;
+
+    // Wide grey track surface
+    drawPath(basePts, TRACK_WIDTH + 6, '#1e1e2e');
+    // Track kerb/edges
+    drawPath(basePts, TRACK_WIDTH + 2, '#2e3a5a');
+    // Track surface
+    drawPath(basePts, TRACK_WIDTH - 2, '#2a3050');
+    // Centre line
+    drawPath(basePts, 1.5, '#3a3a5a', [8, 8]);
+
+    // ── Live trace overlay ────────────────────────────────────────────────
+    if (trace.length >= 2) {
+      // Colour trace by speed (not available here, so use gradient by position)
+      drawPath(trace, TRACE_WIDTH, 'rgba(59,110,200,0.8)');
+    }
+
+    // ── Start/Finish line (at first point of predefined data) ─────────────
+    if (predefPts && predefPts.length > 2) {
+      const sp = w2c(predefPts[0].x, predefPts[0].z);
+      const np = w2c(predefPts[2].x, predefPts[2].z);
+      const angle = Math.atan2(np.cy - sp.cy, np.cx - sp.cx) + Math.PI / 2;
+      ctx.save();
+      ctx.translate(sp.cx, sp.cy);
+      ctx.rotate(angle);
+      ctx.fillStyle = '#ffffff';
+      for (let i = 0; i < 6; i++) {
+        ctx.fillStyle = i % 2 === 0 ? '#ffffff' : '#000000';
+        ctx.fillRect(-6 + i * 2, -1, 2, 9);
+      }
+      ctx.restore();
+    }
+
+    // ── Rival cars ────────────────────────────────────────────────────────
+    allCars.forEach(car => {
+      if (car.carIndex === 0) return; // player drawn separately
+      const { cx, cy } = w2c(car.x, car.z);
+      const colour = TEAM_COLOURS[car.carIndex] || '#666';
       ctx.beginPath();
-      ctx.arc(cx, cz, RIVAL_RADIUS, 0, Math.PI * 2);
-      ctx.fillStyle = RIVAL_COLOUR;
+      ctx.arc(cx, cy, RIVAL_RADIUS, 0, Math.PI * 2);
+      ctx.fillStyle = colour + 'cc';
       ctx.fill();
-    }
+      ctx.strokeStyle = colour;
+      ctx.lineWidth   = 1;
+      ctx.stroke();
+    });
 
-    // ── Draw player car ───────────────────────────────────────────────────
+    // ── Player car ────────────────────────────────────────────────────────
     if (playerX !== null) {
-      const { cx, cz } = worldToCanvas(playerX, playerZ);
+      const { cx, cy } = w2c(playerX, playerZ);
 
       // Glow ring
+      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, PLAYER_RADIUS + 6);
+      grad.addColorStop(0, 'rgba(225,6,0,0.6)');
+      grad.addColorStop(1, 'rgba(225,6,0,0)');
       ctx.beginPath();
-      ctx.arc(cx, cz, PLAYER_RADIUS + 4, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(225,6,0,0.25)';
+      ctx.arc(cx, cy, PLAYER_RADIUS + 6, 0, Math.PI * 2);
+      ctx.fillStyle = grad;
       ctx.fill();
 
       ctx.beginPath();
-      ctx.arc(cx, cz, PLAYER_RADIUS, 0, Math.PI * 2);
-      ctx.fillStyle = PLAYER_COLOUR;
+      ctx.arc(cx, cy, PLAYER_RADIUS, 0, Math.PI * 2);
+      ctx.fillStyle = '#e10600';
       ctx.fill();
 
       ctx.beginPath();
-      ctx.arc(cx, cz, PLAYER_RADIUS - 2, 0, Math.PI * 2);
-      ctx.fillStyle = '#fff';
+      ctx.arc(cx, cy, PLAYER_RADIUS - 3, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
       ctx.fill();
     }
   }
 
-  // ── Export ───────────────────────────────────────────────────────────────
-  window.CircuitMap = { init, updateTrace, updateCars };
+  // ── Export ────────────────────────────────────────────────────────────────
+  window.CircuitMap = { init, updateTrace, updateCars, setTrackId, setParticipants };
 })();

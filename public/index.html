@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="it">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -38,14 +38,23 @@
   </div>
   <div class="topbar-status">
     <span class="dot" id="conn-dot"></span>
-    <span id="conn-label">Waiting…</span>
+    <span id="conn-label">In attesa…</span>
   </div>
 </header>
+
+<!-- ══ PIT NOTIFICATION ══════════════════════════════════════════════════════ -->
+<div class="pit-notification" id="pit-notification" style="display:none">
+  <span class="pit-notif-icon">🔧</span>
+  <div class="pit-notif-body">
+    <strong>PIT STOP</strong>
+    <span id="pit-notif-text">Cambio gomme in corso…</span>
+  </div>
+</div>
 
 <!-- ══ MAIN GRID ═════════════════════════════════════════════════════════════ -->
 <main class="dashboard">
 
-  <!-- ── Column 1 – Timing ──────────────────────────────────────────────── -->
+  <!-- ── Col 1 – Timing ─────────────────────────────────────────────────── -->
   <section class="card timing-card">
     <h2 class="card-title">Timing</h2>
 
@@ -55,15 +64,15 @@
     </div>
 
     <div class="timing-row">
-      <label>Current Lap</label>
+      <label>Giro Corrente</label>
       <span class="time-value highlight" id="current-lap-time">–:––.–––</span>
     </div>
     <div class="timing-row">
-      <label>Last Lap</label>
+      <label>Ultimo Giro</label>
       <span class="time-value" id="last-lap-time">–:––.–––</span>
     </div>
     <div class="timing-row">
-      <label>Best Lap</label>
+      <label>Miglior Giro</label>
       <span class="time-value purple" id="best-lap-time">–:––.–––</span>
     </div>
 
@@ -83,166 +92,221 @@
     </div>
 
     <div class="timing-row small">
-      <label>Gap to Leader</label>
+      <label>Gap al Leader</label>
       <span class="time-value" id="gap-leader">–</span>
     </div>
     <div class="timing-row small">
-      <label>Gap to Ahead</label>
+      <label>Gap Davanti</label>
       <span class="time-value" id="gap-ahead">–</span>
     </div>
     <div class="timing-row small">
-      <label>Lap Distance</label>
+      <label>Dist. Giro</label>
       <span class="time-value" id="lap-distance">–</span>
     </div>
-  </section>
-
-  <!-- ── Column 2 – Telemetry ───────────────────────────────────────────── -->
-  <section class="card telemetry-card">
-    <h2 class="card-title">Telemetry</h2>
-
-    <!-- Speed + Gear row -->
-    <div class="speed-row">
-      <div class="speed-block">
-        <div class="big-value" id="speed">0</div>
-        <div class="big-label">km/h</div>
-      </div>
-      <div class="gear-block">
-        <div class="gear-display" id="gear">N</div>
-        <div class="big-label">Gear</div>
-      </div>
-      <div class="drs-block">
-        <div class="drs-badge" id="drs-badge">DRS</div>
-      </div>
-    </div>
-
-    <!-- RPM gauge -->
-    <div class="rpm-section">
-      <div class="rpm-header">
-        <span>RPM</span>
-        <span id="rpm-value">0</span>
-      </div>
-      <div class="rpm-bar-track">
-        <div class="rpm-bar-fill" id="rpm-bar"></div>
-      </div>
-      <!-- Rev lights -->
-      <div class="rev-lights" id="rev-lights">
-        <span></span><span></span><span></span><span></span><span></span>
-        <span></span><span></span><span></span><span></span><span></span>
-        <span></span><span></span><span></span><span></span><span></span>
-      </div>
-    </div>
-
-    <!-- Throttle / Brake / Steer / ERS -->
-    <div class="inputs-section">
-      <div class="input-row">
-        <label>Throttle</label>
-        <div class="bar-track green-track">
-          <div class="bar-fill" id="throttle-bar"></div>
-        </div>
-        <span class="bar-pct" id="throttle-pct">0%</span>
-      </div>
-      <div class="input-row">
-        <label>Brake</label>
-        <div class="bar-track red-track">
-          <div class="bar-fill" id="brake-bar"></div>
-        </div>
-        <span class="bar-pct" id="brake-pct">0%</span>
-      </div>
-      <div class="input-row">
-        <label>Steer</label>
-        <div class="steer-track">
-          <div class="steer-center"></div>
-          <div class="steer-fill" id="steer-fill"></div>
-        </div>
-        <span class="bar-pct" id="steer-pct">0</span>
-      </div>
-      <div class="input-row">
-        <label>ERS</label>
-        <div class="bar-track blue-track">
-          <div class="bar-fill" id="ers-bar"></div>
-        </div>
-        <span class="bar-pct" id="ers-pct">0%</span>
-      </div>
-    </div>
-
-    <!-- G-forces -->
-    <div class="gforce-row">
-      <div class="gforce-block">
-        <span class="gforce-label">Lat G</span>
-        <span class="gforce-value" id="g-lat">0.0</span>
-      </div>
-      <div class="gforce-block">
-        <span class="gforce-label">Lon G</span>
-        <span class="gforce-value" id="g-lon">0.0</span>
-      </div>
-      <div class="gforce-block">
-        <span class="gforce-label">Vert G</span>
-        <span class="gforce-value" id="g-vert">0.0</span>
-      </div>
+    <div class="timing-row small">
+      <label>Pit Stop</label>
+      <span class="time-value" id="num-pit-stops">0</span>
     </div>
   </section>
 
-  <!-- ── Column 3 – Circuit Map ─────────────────────────────────────────── -->
+  <!-- ── Col 2 – Steering Wheel ─────────────────────────────────────────── -->
+  <section class="card steering-card">
+    <h2 class="card-title">Volante &amp; Dati</h2>
+
+    <div class="steering-wrapper">
+      <!-- SVG Steering Wheel -->
+      <div class="sw-container" id="sw-container">
+        <svg class="sw-svg" viewBox="-160 -165 320 330" xmlns="http://www.w3.org/2000/svg">
+          <!-- Outer tyre/rim -->
+          <circle r="148" fill="none" stroke="#111" stroke-width="28"/>
+          <circle r="148" fill="none" stroke="#222" stroke-width="22"/>
+          <circle r="148" fill="none" stroke="#1a1a2e" stroke-width="18"/>
+          <!-- Rim highlight -->
+          <circle r="148" fill="none" stroke="#333" stroke-width="2"/>
+
+          <!-- Left spoke -->
+          <path d="M -50,-10 L -138,-30 L -138,30 L -50,10 Z" fill="#1a1a2e" stroke="#333" stroke-width="1"/>
+          <!-- Right spoke -->
+          <path d="M 50,-10 L 138,-30 L 138,30 L 50,10 Z"  fill="#1a1a2e" stroke="#333" stroke-width="1"/>
+          <!-- Bottom spoke -->
+          <path d="M -12,50 L -25,140 L 25,140 L 12,50 Z"  fill="#1a1a2e" stroke="#333" stroke-width="1"/>
+
+          <!-- Center hub background -->
+          <rect x="-72" y="-60" width="144" height="112" rx="12" fill="#0d0d1a" stroke="#2a2a3e" stroke-width="1.5"/>
+
+          <!-- RPM LED strip (top of display) -->
+          <rect x="-72" y="-80" width="144" height="14" rx="4" fill="#0d0d1a" stroke="#2a2a3e" stroke-width="1"/>
+          <!-- Individual LEDs (15 total, rendered by JS via DOM overlay) -->
+
+          <!-- DRS button area (right side of hub) -->
+          <rect x="78" y="-28" width="32" height="18" rx="4" fill="#111" stroke="#333" stroke-width="1"/>
+          <text x="94" y="-16" font-size="7" fill="#555" text-anchor="middle" font-family="monospace" font-weight="bold">DRS</text>
+
+          <!-- PIT button area (right side, below DRS) -->
+          <rect x="78" y="-6" width="32" height="18" rx="4" fill="#111" stroke="#333" stroke-width="1" id="sw-pit-btn"/>
+          <text x="94" y="8" font-size="7" fill="#555" text-anchor="middle" font-family="monospace" font-weight="bold" id="sw-pit-label">PIT</text>
+
+          <!-- ERS mode (left side) -->
+          <rect x="-110" y="-28" width="28" height="18" rx="4" fill="#111" stroke="#333" stroke-width="1"/>
+          <text x="-96" y="-16" font-size="6" fill="#555" text-anchor="middle" font-family="monospace">ERS</text>
+          <rect x="-110" y="-6" width="28" height="18" rx="4" fill="#111" stroke="#333" stroke-width="1"/>
+          <text x="-96" y="8" font-size="6" fill="#555" text-anchor="middle" font-family="monospace" id="sw-ers-mode-svg">–</text>
+
+          <!-- Team color accent bar at top of center -->
+          <rect x="-72" y="-60" width="144" height="4" rx="2" fill="#e10600" id="sw-team-bar"/>
+
+          <!-- F1 25 logo in center bottom of hub -->
+          <text x="0" y="40" font-size="9" fill="#333" text-anchor="middle" font-family="'Segoe UI', sans-serif" font-weight="900">F1 25</text>
+        </svg>
+
+        <!-- LED strip overlay -->
+        <div class="sw-leds" id="sw-leds">
+          <span></span><span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span><span></span>
+        </div>
+
+        <!-- Center display overlay -->
+        <div class="sw-display">
+          <div class="sw-speed-row">
+            <span class="sw-speed" id="sw-speed">0</span>
+            <span class="sw-unit">km/h</span>
+          </div>
+          <div class="sw-gear-row">
+            <span class="sw-gear" id="sw-gear">N</span>
+            <div class="sw-drs-pit">
+              <span class="sw-badge drs-badge-sw" id="sw-drs">DRS</span>
+              <span class="sw-badge pit-badge-sw" id="sw-pit">PIT</span>
+            </div>
+          </div>
+          <div class="sw-lap-row">
+            <span class="sw-lap-label">Giro</span>
+            <span class="sw-lap-time" id="sw-lap-time">–:––.–––</span>
+          </div>
+          <div class="sw-sector-row">
+            <span class="sw-sec" id="sw-s1">S1: –</span>
+            <span class="sw-sec" id="sw-s2">S2: –</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Inputs below wheel -->
+      <div class="sw-inputs">
+        <div class="sw-input-row">
+          <label>Gas</label>
+          <div class="sw-bar green-track"><div class="bar-fill" id="sw-throttle-bar"></div></div>
+          <span id="sw-throttle-pct" class="sw-pct">0%</span>
+        </div>
+        <div class="sw-input-row">
+          <label>Freno</label>
+          <div class="sw-bar red-track"><div class="bar-fill" id="sw-brake-bar"></div></div>
+          <span id="sw-brake-pct" class="sw-pct">0%</span>
+        </div>
+        <div class="sw-input-row">
+          <label>Sterzo</label>
+          <div class="steer-track sw-bar">
+            <div class="steer-center"></div>
+            <div class="steer-fill" id="sw-steer-fill"></div>
+          </div>
+          <span id="sw-steer-pct" class="sw-pct">0</span>
+        </div>
+      </div>
+
+      <!-- G-forces -->
+      <div class="sw-gforces">
+        <div class="gforce-block">
+          <span class="gforce-label">Lat G</span>
+          <span class="gforce-value" id="sw-g-lat">0.0</span>
+        </div>
+        <div class="gforce-block">
+          <span class="gforce-label">Lon G</span>
+          <span class="gforce-value" id="sw-g-lon">0.0</span>
+        </div>
+        <div class="gforce-block">
+          <span class="gforce-label">Vert G</span>
+          <span class="gforce-value" id="sw-g-vert">0.0</span>
+        </div>
+        <div class="gforce-block">
+          <span class="gforce-label">RPM</span>
+          <span class="gforce-value" id="sw-rpm">0</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Col 3 – Circuit Map ─────────────────────────────────────────────── -->
   <section class="card circuit-card">
-    <h2 class="card-title">Circuit Map</h2>
+    <h2 class="card-title">Mappa Circuito <span class="circuit-live-dot"></span></h2>
     <div class="canvas-wrap">
       <canvas id="circuit-canvas"></canvas>
     </div>
   </section>
 
+  <!-- ── Col 4 – Live Leaderboard ───────────────────────────────────────── -->
+  <section class="card leaderboard-card">
+    <h2 class="card-title">
+      Classifica Live
+      <span class="lb-session-type" id="lb-session-label">–</span>
+    </h2>
+    <div class="lb-header-row">
+      <span>P</span>
+      <span></span>
+      <span>Driver</span>
+      <span>Gom</span>
+      <span>Gap</span>
+    </div>
+    <div class="lb-rows" id="leaderboard-rows"></div>
+  </section>
+
   <!-- ── Row 2 – Tyres ──────────────────────────────────────────────────── -->
   <section class="card tyre-card">
     <h2 class="card-title">
-      Tyres
+      Pneumatici
       <span class="tyre-compound-badge" id="tyre-compound-badge">–</span>
-      <span class="tyre-age" id="tyre-age">0 laps</span>
+      <span class="tyre-age" id="tyre-age">0 giri</span>
     </h2>
     <div class="tyres-grid">
-      <!-- Front Left -->
       <div class="tyre-widget" id="tyre-fl">
-        <div class="tyre-pos">FL</div>
+        <div class="tyre-pos">AS</div>
         <div class="tyre-circle" id="tyre-circle-fl">
           <span class="tyre-temp" id="tyre-temp-fl">–°</span>
         </div>
         <div class="tyre-info">
-          <div class="tyre-line"><span>Inner</span><span id="tyre-inner-fl">–°</span></div>
-          <div class="tyre-line"><span>Brake</span><span id="brake-temp-fl">–°</span></div>
+          <div class="tyre-line"><span>Int</span><span id="tyre-inner-fl">–°</span></div>
+          <div class="tyre-line"><span>Freno</span><span id="brake-temp-fl">–°</span></div>
           <div class="tyre-line"><span>Press</span><span id="tyre-press-fl">– psi</span></div>
         </div>
       </div>
-      <!-- Front Right -->
       <div class="tyre-widget" id="tyre-fr">
-        <div class="tyre-pos">FR</div>
+        <div class="tyre-pos">AD</div>
         <div class="tyre-circle" id="tyre-circle-fr">
           <span class="tyre-temp" id="tyre-temp-fr">–°</span>
         </div>
         <div class="tyre-info">
-          <div class="tyre-line"><span>Inner</span><span id="tyre-inner-fr">–°</span></div>
-          <div class="tyre-line"><span>Brake</span><span id="brake-temp-fr">–°</span></div>
+          <div class="tyre-line"><span>Int</span><span id="tyre-inner-fr">–°</span></div>
+          <div class="tyre-line"><span>Freno</span><span id="brake-temp-fr">–°</span></div>
           <div class="tyre-line"><span>Press</span><span id="tyre-press-fr">– psi</span></div>
         </div>
       </div>
-      <!-- Rear Left -->
       <div class="tyre-widget" id="tyre-rl">
-        <div class="tyre-pos">RL</div>
+        <div class="tyre-pos">PS</div>
         <div class="tyre-circle" id="tyre-circle-rl">
           <span class="tyre-temp" id="tyre-temp-rl">–°</span>
         </div>
         <div class="tyre-info">
-          <div class="tyre-line"><span>Inner</span><span id="tyre-inner-rl">–°</span></div>
-          <div class="tyre-line"><span>Brake</span><span id="brake-temp-rl">–°</span></div>
+          <div class="tyre-line"><span>Int</span><span id="tyre-inner-rl">–°</span></div>
+          <div class="tyre-line"><span>Freno</span><span id="brake-temp-rl">–°</span></div>
           <div class="tyre-line"><span>Press</span><span id="tyre-press-rl">– psi</span></div>
         </div>
       </div>
-      <!-- Rear Right -->
       <div class="tyre-widget" id="tyre-rr">
-        <div class="tyre-pos">RR</div>
+        <div class="tyre-pos">PD</div>
         <div class="tyre-circle" id="tyre-circle-rr">
           <span class="tyre-temp" id="tyre-temp-rr">–°</span>
         </div>
         <div class="tyre-info">
-          <div class="tyre-line"><span>Inner</span><span id="tyre-inner-rr">–°</span></div>
-          <div class="tyre-line"><span>Brake</span><span id="brake-temp-rr">–°</span></div>
+          <div class="tyre-line"><span>Int</span><span id="tyre-inner-rr">–°</span></div>
+          <div class="tyre-line"><span>Freno</span><span id="brake-temp-rr">–°</span></div>
           <div class="tyre-line"><span>Press</span><span id="tyre-press-rr">– psi</span></div>
         </div>
       </div>
@@ -251,56 +315,84 @@
 
   <!-- ── Row 2 – Fuel & ERS ──────────────────────────────────────────────── -->
   <section class="card fuel-card">
-    <h2 class="card-title">Fuel &amp; ERS</h2>
+    <h2 class="card-title">Carburante &amp; ERS</h2>
 
     <div class="fuel-section">
       <div class="fuel-header">
-        <span>Fuel</span>
+        <span>Carburante</span>
         <span><span id="fuel-kg">–</span> kg</span>
       </div>
       <div class="bar-track orange-track tall-bar">
         <div class="bar-fill" id="fuel-bar"></div>
       </div>
       <div class="fuel-footer">
-        <span id="fuel-remaining-laps">– laps remaining</span>
+        <span id="fuel-remaining-laps">– giri rimanenti</span>
         <span>Mix: <span id="fuel-mix">–</span></span>
       </div>
     </div>
 
     <div class="ers-section">
       <div class="fuel-header">
-        <span>ERS Battery</span>
+        <span>Batteria ERS</span>
         <span><span id="ers-mj">–</span> MJ</span>
       </div>
       <div class="bar-track blue-track tall-bar">
         <div class="bar-fill" id="ers-store-bar"></div>
       </div>
       <div class="fuel-footer">
-        <span>Deployed: <span id="ers-deployed">–</span> MJ</span>
+        <span>Deploy: <span id="ers-deployed">–</span> MJ</span>
         <span>Mode: <span id="ers-mode">–</span></span>
       </div>
     </div>
 
     <div class="misc-row">
       <div class="misc-item">
-        <span class="misc-label">Engine Temp</span>
+        <span class="misc-label">T. Motore</span>
         <span class="misc-value" id="engine-temp">–°C</span>
       </div>
       <div class="misc-item">
-        <span class="misc-label">Brake Bias</span>
+        <span class="misc-label">Bias Freni</span>
         <span class="misc-value" id="brake-bias">–%</span>
       </div>
       <div class="misc-item">
-        <span class="misc-label">Flag</span>
+        <span class="misc-label">Bandiera</span>
         <span class="misc-value flag-indicator" id="fia-flag">–</span>
       </div>
+    </div>
+  </section>
+
+  <!-- ── Row 3 – Lap Recorder ──────────────────────────────────────────────── -->
+  <section class="card lap-recorder-card">
+    <h2 class="card-title">
+      📹 Registratore Giro
+      <span class="lap-rec-indicator" id="lap-rec-indicator"></span>
+    </h2>
+    <div class="lap-recorder-body">
+      <div class="lap-rec-controls">
+        <button class="btn-record" id="lap-rec-btn">⏺ Registra Giro</button>
+        <span class="lap-rec-time" id="lap-rec-time">–</span>
+        <span class="lap-rec-status" id="lap-rec-status" style="display:none"></span>
+      </div>
+      <canvas class="speed-trace-canvas" id="speed-trace-canvas"></canvas>
+    </div>
+
+    <!-- AI Analysis Panel -->
+    <div class="ai-analysis-panel" id="ai-analysis-panel" style="display:none">
+      <div class="ai-panel-header">
+        <span class="ai-panel-title">🤖 Analisi AI Giro</span>
+        <button class="ai-panel-close" id="ai-panel-close">✕</button>
+      </div>
+      <ul class="ai-hints-list" id="ai-hints-list"></ul>
     </div>
   </section>
 
 </main>
 
 <script src="/socket.io/socket.io.js"></script>
+<script src="/js/circuits-data.js"></script>
 <script src="/js/circuit.js"></script>
+<script src="/js/leaderboard.js"></script>
+<script src="/js/lapRecorder.js"></script>
 <script src="/js/app.js"></script>
 </body>
 </html>
