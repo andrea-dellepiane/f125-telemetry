@@ -8,10 +8,19 @@
     "dev": "node --watch server.js",
     "demo": "node server.js --demo"
   },
-  "keywords": ["f1", "telemetry", "udp", "dashboard", "formula1"],
+  "keywords": [
+    "f1",
+    "telemetry",
+    "udp",
+    "dashboard",
+    "formula1"
+  ],
   "license": "MIT",
   "dependencies": {
     "express": "^4.19.2",
     "socket.io": "^4.7.5"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14"
   }
 }
