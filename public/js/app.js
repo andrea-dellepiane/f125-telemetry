@@ -4,6 +4,9 @@
  */
 (function () {
 
+  // ── Constants ──────────────────────────────────────────────────────────────
+  const MAX_STEER_ANGLE_DEG = 120; // visual rotation range for the steering wheel SVG
+
   // ── Lookup tables ──────────────────────────────────────────────────────────
   const TRACK_NAMES = {
     '-1': 'Sconosciuto',
@@ -124,7 +127,7 @@
     const container = $('sw-container');
     if (!container) return;
     const svg = container.querySelector('.sw-svg');
-    if (svg) svg.style.transform = `rotate(${(steer || 0) * 120}deg)`;
+    if (svg) svg.style.transform = `rotate(${(steer || 0) * MAX_STEER_ANGLE_DEG}deg)`;
   }
 
   // ── PIT notification ───────────────────────────────────────────────────────

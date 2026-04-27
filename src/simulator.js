@@ -73,7 +73,7 @@ function initCarStates() {
     pitStatus:    0,
     pitCountdown: 0,
     pitStopDone:  false,
-    pitStopLap:   12 + Math.floor(Math.random() * 8) + i * 2,
+    pitStopLap:   Math.min(45, 12 + Math.floor(Math.random() * 8) + i * 2),
     penalties:    0,
     hasFastestLap: false,
   }));

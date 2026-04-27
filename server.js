@@ -32,7 +32,7 @@ app.post('/api/analyze-lap', (req, res) => {
   const hints = [];
 
   if (samples.length < 10) {
-    return res.json({ hints: ['Dati insufficienti per l\'analisi. Completa un giro intero.'] });
+    return res.json({ hints: ["Dati insufficienti per l'analisi. Completa un giro intero."] });
   }
 
   // ── Braking analysis ──────────────────────────────────────────────────────

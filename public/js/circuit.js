@@ -72,7 +72,7 @@
     bbDirty   = true;
 
     if (window.F1CircuitData) {
-      predefPts = window.F1CircuitData[id] || window.F1CircuitData._fallback;
+      predefPts = window.F1CircuitData[id] || window.F1CircuitData._fallback || null;
       bbDirty   = true;
     }
   }
