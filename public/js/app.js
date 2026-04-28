@@ -4,9 +4,6 @@
  */
 (function () {
 
-  // ── Constants ──────────────────────────────────────────────────────────────
-  const MAX_STEER_ANGLE_DEG = 120; // visual rotation range for the steering wheel SVG
-
   // ── Lookup tables ──────────────────────────────────────────────────────────
   const TRACK_NAMES = {
     '-1': 'Sconosciuto',
@@ -92,21 +89,6 @@
     return `${s}.${String(m).padStart(3,'0')}`;
   }
 
-  // ── Rev lights ─────────────────────────────────────────────────────────────
-  const revLightEls = Array.from(document.querySelectorAll('#sw-leds span'));
-
-  function updateRevLights(pctVal) {
-    const lit = Math.round(pctVal / 100 * revLightEls.length);
-    revLightEls.forEach((el, i) => {
-      el.className = '';
-      if (i < lit) {
-        if (i < 5)       el.classList.add('on-green');
-        else if (i < 10) el.classList.add('on-yellow');
-        else             el.classList.add('on-red');
-      }
-    });
-  }
-
   // ── Tyre temp → colour ─────────────────────────────────────────────────────
   function tyreClass(temp) {
     if (temp < 80)  return 'tyre-cold';
@@ -120,14 +102,6 @@
     const el = $(circleId);
     if (!el) return;
     el.className = 'tyre-circle ' + tyreClass(temp);
-  }
-
-  // ── Steering wheel rotation ────────────────────────────────────────────────
-  function updateSteerWheel(steer) {
-    const container = $('sw-container');
-    if (!container) return;
-    const svg = container.querySelector('.sw-svg');
-    if (svg) svg.style.transform = `rotate(${(steer || 0) * MAX_STEER_ANGLE_DEG}deg)`;
   }
 
   // ── PIT notification ───────────────────────────────────────────────────────
@@ -145,13 +119,8 @@
   }
 
   function updatePitStatus(pitStatus) {
-    const pitBadge = $('sw-pit');
-    const pitBtn   = document.getElementById('sw-pit-btn');
-    const pitLabel = document.getElementById('sw-pit-label');
-
+    const pitBadge = $('qs-pit');
     if (pitBadge) pitBadge.classList.toggle('active', pitStatus > 0);
-    if (pitBtn)   pitBtn.style.fill   = pitStatus > 0 ? '#ff9900' : '#111';
-    if (pitLabel) pitLabel.style.fill = pitStatus > 0 ? '#000' : '#555';
 
     if (pitStatus > 0 && lastPitStatus === 0) {
       const msgs = {
@@ -232,11 +201,6 @@
     text('lap-distance', d.lapDistance > 0 ? Math.round(d.lapDistance) + ' m' : '–');
     text('num-pit-stops', d.numPitStops || 0);
 
-    // Steering wheel sector/lap
-    text('sw-lap-time', msToLapTime(d.currentLapTimeInMS));
-    text('sw-s1', `S1: ${d.sector1TimeInMS > 0 ? msSector(d.sector1TimeInMS, d.sector1TimeMinutes) : '–'}`);
-    text('sw-s2', `S2: ${d.sector2TimeInMS > 0 ? msSector(d.sector2TimeInMS, d.sector2TimeMinutes) : '–'}`);
-
     // PIT
     updatePitStatus(d.pitStatus || 0);
 
@@ -251,45 +215,20 @@
   function handleTelemetry(d) {
     const t = d.player || d;
 
-    text('sw-speed', t.speed ?? 0);
+    // Quick stats in timing card
+    text('qs-speed', t.speed ?? 0);
+    text('qs-rpm',   (t.engineRPM || 0).toLocaleString());
     const gearVal = t.gear === -1 ? 'R' : t.gear === 0 ? 'N' : t.gear;
-    text('sw-gear', gearVal ?? 'N');
+    text('qs-gear', gearVal ?? 'N');
 
-    const drsEl = $('sw-drs');
+    const drsEl = $('qs-drs');
     if (drsEl) drsEl.classList.toggle('active', !!t.drs);
 
-    const maxRPM = window.__maxRPM || 15000;
-    const rpmFrac = (t.engineRPM || 0) / maxRPM;
-    text('sw-rpm', (t.engineRPM || 0).toLocaleString());
-    updateRevLights(t.revLightsPercent || 0);
-
-    // Steer wheel rotation
-    updateSteerWheel(t.steer || 0);
-
-    // Input bars (steering wheel section)
+    // Input bars
     setBar('sw-throttle-bar', t.throttle || 0);
     text('sw-throttle-pct', pct(t.throttle || 0));
     setBar('sw-brake-bar', t.brake || 0);
     text('sw-brake-pct', pct(t.brake || 0));
-
-    // Steering fill
-    const steerFrac = ((t.steer || 0) + 1) / 2;
-    const fillEl = $('sw-steer-fill');
-    if (fillEl) {
-      if (Math.abs(t.steer || 0) < 0.02) {
-        fillEl.style.left  = '50%';
-        fillEl.style.width = '2px';
-      } else if ((t.steer || 0) < 0) {
-        const w = (0.5 - steerFrac) * 100;
-        fillEl.style.left  = steerFrac * 100 + '%';
-        fillEl.style.width = w + '%';
-      } else {
-        const w = (steerFrac - 0.5) * 100;
-        fillEl.style.left  = '50%';
-        fillEl.style.width = w + '%';
-      }
-    }
-    text('sw-steer-pct', ((t.steer || 0) * 100).toFixed(0));
 
     // Tyres
     const surf = t.tyresSurfaceTemperature || [0,0,0,0];
@@ -332,10 +271,6 @@
     text('ers-deployed', ((s.ersDeployedThisLap || 0) / 1e6).toFixed(2));
     text('ers-mode',     ERS_MODES[s.ersDeployMode] || 'None');
 
-    // ERS mode on steering wheel SVG
-    const ersSvg = document.getElementById('sw-ers-mode-svg');
-    if (ersSvg) ersSvg.textContent = (ERS_MODES[s.ersDeployMode] || '–').substring(0, 3).toUpperCase();
-
     // Tyre compound badge
     const compoundInfo = TYRE_COMPOUNDS[s.visualTyreCompound] || { name: '–', cls: '' };
     const badge = $('tyre-compound-badge');
@@ -363,9 +298,6 @@
 
   function handleMotion(d) {
     const pc = d.playerCar || {};
-    text('sw-g-lat',  (pc.gForceLateral     || 0).toFixed(2));
-    text('sw-g-lon',  (pc.gForceLongitudinal || 0).toFixed(2));
-    text('sw-g-vert', (pc.gForceVertical    || 0).toFixed(2));
 
     CircuitMap.updateCars(
       { x: pc.worldPositionX, z: pc.worldPositionZ },

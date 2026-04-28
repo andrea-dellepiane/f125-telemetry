@@ -104,137 +104,48 @@
       <label>Pit Stop</label>
       <span class="time-value" id="num-pit-stops">0</span>
     </div>
-  </section>
 
-  <!-- ── Col 2 – Steering Wheel ─────────────────────────────────────────── -->
-  <section class="card steering-card">
-    <h2 class="card-title">Volante &amp; Dati</h2>
-
-    <div class="steering-wrapper">
-      <!-- SVG Steering Wheel -->
-      <div class="sw-container" id="sw-container">
-        <svg class="sw-svg" viewBox="-160 -165 320 330" xmlns="http://www.w3.org/2000/svg">
-          <!-- Outer tyre/rim -->
-          <circle r="148" fill="none" stroke="#111" stroke-width="28"/>
-          <circle r="148" fill="none" stroke="#222" stroke-width="22"/>
-          <circle r="148" fill="none" stroke="#1a1a2e" stroke-width="18"/>
-          <!-- Rim highlight -->
-          <circle r="148" fill="none" stroke="#333" stroke-width="2"/>
-
-          <!-- Left spoke -->
-          <path d="M -50,-10 L -138,-30 L -138,30 L -50,10 Z" fill="#1a1a2e" stroke="#333" stroke-width="1"/>
-          <!-- Right spoke -->
-          <path d="M 50,-10 L 138,-30 L 138,30 L 50,10 Z"  fill="#1a1a2e" stroke="#333" stroke-width="1"/>
-          <!-- Bottom spoke -->
-          <path d="M -12,50 L -25,140 L 25,140 L 12,50 Z"  fill="#1a1a2e" stroke="#333" stroke-width="1"/>
-
-          <!-- Center hub background -->
-          <rect x="-72" y="-60" width="144" height="112" rx="12" fill="#0d0d1a" stroke="#2a2a3e" stroke-width="1.5"/>
-
-          <!-- RPM LED strip (top of display) -->
-          <rect x="-72" y="-80" width="144" height="14" rx="4" fill="#0d0d1a" stroke="#2a2a3e" stroke-width="1"/>
-          <!-- Individual LEDs (15 total, rendered by JS via DOM overlay) -->
-
-          <!-- DRS button area (right side of hub) -->
-          <rect x="78" y="-28" width="32" height="18" rx="4" fill="#111" stroke="#333" stroke-width="1"/>
-          <text x="94" y="-16" font-size="7" fill="#555" text-anchor="middle" font-family="monospace" font-weight="bold">DRS</text>
-
-          <!-- PIT button area (right side, below DRS) -->
-          <rect x="78" y="-6" width="32" height="18" rx="4" fill="#111" stroke="#333" stroke-width="1" id="sw-pit-btn"/>
-          <text x="94" y="8" font-size="7" fill="#555" text-anchor="middle" font-family="monospace" font-weight="bold" id="sw-pit-label">PIT</text>
-
-          <!-- ERS mode (left side) -->
-          <rect x="-110" y="-28" width="28" height="18" rx="4" fill="#111" stroke="#333" stroke-width="1"/>
-          <text x="-96" y="-16" font-size="6" fill="#555" text-anchor="middle" font-family="monospace">ERS</text>
-          <rect x="-110" y="-6" width="28" height="18" rx="4" fill="#111" stroke="#333" stroke-width="1"/>
-          <text x="-96" y="8" font-size="6" fill="#555" text-anchor="middle" font-family="monospace" id="sw-ers-mode-svg">–</text>
-
-          <!-- Team color accent bar at top of center -->
-          <rect x="-72" y="-60" width="144" height="4" rx="2" fill="#e10600" id="sw-team-bar"/>
-
-          <!-- F1 25 logo in center bottom of hub -->
-          <text x="0" y="40" font-size="9" fill="#333" text-anchor="middle" font-family="'Segoe UI', sans-serif" font-weight="900">F1 25</text>
-        </svg>
-
-        <!-- LED strip overlay -->
-        <div class="sw-leds" id="sw-leds">
-          <span></span><span></span><span></span><span></span><span></span>
-          <span></span><span></span><span></span><span></span><span></span>
-          <span></span><span></span><span></span><span></span><span></span>
-        </div>
-
-        <!-- Center display overlay -->
-        <div class="sw-display">
-          <div class="sw-speed-row">
-            <span class="sw-speed" id="sw-speed">0</span>
-            <span class="sw-unit">km/h</span>
-          </div>
-          <div class="sw-gear-row">
-            <span class="sw-gear" id="sw-gear">N</span>
-            <div class="sw-drs-pit">
-              <span class="sw-badge drs-badge-sw" id="sw-drs">DRS</span>
-              <span class="sw-badge pit-badge-sw" id="sw-pit">PIT</span>
-            </div>
-          </div>
-          <div class="sw-lap-row">
-            <span class="sw-lap-label">Giro</span>
-            <span class="sw-lap-time" id="sw-lap-time">–:––.–––</span>
-          </div>
-          <div class="sw-sector-row">
-            <span class="sw-sec" id="sw-s1">S1: –</span>
-            <span class="sw-sec" id="sw-s2">S2: –</span>
-          </div>
-        </div>
+    <div class="car-stats-row">
+      <div class="car-stat-block">
+        <span class="car-stat-label">Velocità</span>
+        <span class="car-stat-value" id="qs-speed">0</span>
+        <small class="car-stat-unit">km/h</small>
       </div>
-
-      <!-- Inputs below wheel -->
-      <div class="sw-inputs">
-        <div class="sw-input-row">
-          <label>Gas</label>
-          <div class="sw-bar green-track"><div class="bar-fill" id="sw-throttle-bar"></div></div>
-          <span id="sw-throttle-pct" class="sw-pct">0%</span>
-        </div>
-        <div class="sw-input-row">
-          <label>Freno</label>
-          <div class="sw-bar red-track"><div class="bar-fill" id="sw-brake-bar"></div></div>
-          <span id="sw-brake-pct" class="sw-pct">0%</span>
-        </div>
-        <div class="sw-input-row">
-          <label>Sterzo</label>
-          <div class="steer-track sw-bar">
-            <div class="steer-center"></div>
-            <div class="steer-fill" id="sw-steer-fill"></div>
-          </div>
-          <span id="sw-steer-pct" class="sw-pct">0</span>
-        </div>
+      <div class="car-stat-block">
+        <span class="car-stat-label">Marcia</span>
+        <span class="car-stat-value gear-value" id="qs-gear">N</span>
       </div>
+      <div class="car-stat-block">
+        <span class="car-stat-label">RPM</span>
+        <span class="car-stat-value" id="qs-rpm">0</span>
+      </div>
+      <div class="car-stat-block car-stat-badges">
+        <span class="qs-badge drs-badge-qs" id="qs-drs">DRS</span>
+        <span class="qs-badge pit-badge-qs" id="qs-pit">PIT</span>
+      </div>
+    </div>
 
-      <!-- G-forces -->
-      <div class="sw-gforces">
-        <div class="gforce-block">
-          <span class="gforce-label">Lat G</span>
-          <span class="gforce-value" id="sw-g-lat">0.0</span>
-        </div>
-        <div class="gforce-block">
-          <span class="gforce-label">Lon G</span>
-          <span class="gforce-value" id="sw-g-lon">0.0</span>
-        </div>
-        <div class="gforce-block">
-          <span class="gforce-label">Vert G</span>
-          <span class="gforce-value" id="sw-g-vert">0.0</span>
-        </div>
-        <div class="gforce-block">
-          <span class="gforce-label">RPM</span>
-          <span class="gforce-value" id="sw-rpm">0</span>
-        </div>
+    <div class="inputs-row">
+      <div class="input-item">
+        <label>Gas</label>
+        <div class="bar-track green-track"><div class="bar-fill" id="sw-throttle-bar"></div></div>
+        <span id="sw-throttle-pct" class="input-pct">0%</span>
+      </div>
+      <div class="input-item">
+        <label>Freno</label>
+        <div class="bar-track red-track"><div class="bar-fill" id="sw-brake-bar"></div></div>
+        <span id="sw-brake-pct" class="input-pct">0%</span>
       </div>
     </div>
   </section>
+
+
 
   <!-- ── Col 3 – Circuit Map ─────────────────────────────────────────────── -->
   <section class="card circuit-card">
     <h2 class="card-title">Mappa Circuito <span class="circuit-live-dot"></span></h2>
     <div class="canvas-wrap">
+      <img id="circuit-img" class="circuit-bg-img" src="" alt="" aria-hidden="true"/>
       <canvas id="circuit-canvas"></canvas>
     </div>
   </section>

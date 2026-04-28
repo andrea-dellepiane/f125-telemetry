@@ -126,7 +126,7 @@ html, body {
 /* ── Dashboard grid ──────────────────────────────────────────────────────── */
 .dashboard {
   display: grid;
-  grid-template-columns: 210px 1fr 380px 250px;
+  grid-template-columns: 1fr 1fr 380px 250px;
   grid-template-rows: 1fr auto auto;
   gap: 10px;
   padding: 10px;
@@ -134,8 +134,7 @@ html, body {
 }
 
 /* Row 1 */
-.timing-card      { grid-column: 1; grid-row: 1; }
-.steering-card    { grid-column: 2; grid-row: 1; }
+.timing-card      { grid-column: 1 / span 2; grid-row: 1; }
 .circuit-card     { grid-column: 3; grid-row: 1 / span 2; }
 .leaderboard-card { grid-column: 4; grid-row: 1 / span 2; }
 
@@ -213,105 +212,50 @@ html, body {
 .sector-label { display: block; font-size: 9px; color: var(--text-dim); letter-spacing: 1px; }
 .sector-time  { display: block; font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
 
-/* ── Steering Wheel Card ─────────────────────────────────────────────────── */
-.steering-wrapper {
+/* ── Car Stats Row (in timing card) ─────────────────────────────────────── */
+.car-stats-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.car-stat-block {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  height: 100%;
-}
-
-.sw-container {
-  position: relative;
-  width: 240px;
-  height: 240px;
-  flex-shrink: 0;
-}
-
-.sw-svg {
-  width: 100%;
-  height: 100%;
-  transition: transform 0.05s linear;
-  filter: drop-shadow(0 0 8px rgba(100,100,200,0.2));
-}
-
-/* LED strip overlaid on SVG */
-.sw-leds {
-  position: absolute;
-  top: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 3px;
-  width: 160px;
-  pointer-events: none;
-}
-.sw-leds span {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
   flex: 1;
-  height: 6px;
-  border-radius: 3px;
-  background: var(--surface-3);
-  transition: background .05s;
+  min-width: 60px;
 }
-.sw-leds span.on-green  { background: var(--green);       box-shadow: 0 0 4px var(--green); }
-.sw-leds span.on-yellow { background: var(--yellow);      box-shadow: 0 0 4px var(--yellow); }
-.sw-leds span.on-red    { background: var(--accent-red);  box-shadow: 0 0 6px var(--accent-red); }
-
-/* Center display overlay */
-.sw-display {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 148px;
-  height: 116px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  pointer-events: none;
+.car-stat-label {
+  font-size: 9px;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+  text-transform: uppercase;
 }
-
-.sw-speed-row {
-  display: flex;
-  align-items: baseline;
-  gap: 3px;
-}
-.sw-speed {
-  font-size: 36px;
+.car-stat-value {
+  font-size: 18px;
   font-weight: 900;
-  color: #fff;
   font-variant-numeric: tabular-nums;
-  line-height: 1;
+  line-height: 1.2;
+  color: #fff;
 }
-.sw-unit  { font-size: 10px; color: var(--text-dim); letter-spacing: 1px; }
+.car-stat-unit { font-size: 10px; color: var(--text-dim); }
+.gear-value { color: var(--accent-red); text-shadow: var(--glow-red); font-size: 22px; }
 
-.sw-gear-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+.car-stat-badges {
+  gap: 4px;
+  justify-content: center;
 }
-.sw-gear {
-  font-size: 36px;
-  font-weight: 900;
-  color: var(--accent-red);
-  line-height: 1;
-  width: 30px;
-  text-align: center;
-  text-shadow: var(--glow-red);
-}
-
-.sw-drs-pit {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-.sw-badge {
-  padding: 2px 6px;
+.qs-badge {
+  padding: 2px 8px;
   border-radius: 4px;
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 900;
   letter-spacing: 1px;
   background: var(--surface-3);
@@ -319,13 +263,13 @@ html, body {
   color: var(--text-dim);
   transition: all .2s;
 }
-.drs-badge-sw.active {
+.drs-badge-qs.active {
   background: var(--green);
   border-color: var(--green);
   color: #000;
   box-shadow: 0 0 8px var(--green);
 }
-.pit-badge-sw.active {
+.pit-badge-qs.active {
   background: var(--yellow);
   border-color: var(--yellow);
   color: #000;
@@ -337,51 +281,27 @@ html, body {
   50%       { box-shadow: 0 0 18px var(--yellow); }
 }
 
-.sw-lap-row {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  border-top: 1px solid var(--border);
-  padding-top: 3px;
-  width: 100%;
-  justify-content: center;
-}
-.sw-lap-label { font-size: 9px; color: var(--text-dim); }
-.sw-lap-time  { font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; color: #fff; }
-
-.sw-sector-row {
-  display: flex;
-  gap: 8px;
-}
-.sw-sec { font-size: 9px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
-
-/* Input bars under the steering wheel */
-.sw-inputs {
-  width: 100%;
+/* Input bars in timing card */
+.inputs-row {
   display: flex;
   flex-direction: column;
   gap: 5px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
 }
-.sw-input-row {
+.input-item {
   display: flex;
   align-items: center;
   gap: 6px;
 }
-.sw-input-row label {
-  width: 46px;
+.input-item label {
+  width: 40px;
   font-size: 10px;
   color: var(--text-dim);
   flex-shrink: 0;
 }
-.sw-bar {
-  flex: 1;
-  height: 8px;
-  background: var(--surface-2);
-  border-radius: 4px;
-  overflow: hidden;
-  position: relative;
-}
-.sw-pct { width: 34px; text-align: right; font-size: 10px; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.input-pct { width: 34px; text-align: right; font-size: 10px; font-variant-numeric: tabular-nums; flex-shrink: 0; }
 
 .bar-fill {
   height: 100%;
@@ -393,42 +313,6 @@ html, body {
 .red-track   .bar-fill { background: var(--accent-red); }
 .blue-track  .bar-fill { background: var(--accent-blue); }
 .orange-track .bar-fill{ background: var(--orange); }
-
-/* Steer bar */
-.steer-track {
-  flex: 1;
-  height: 8px;
-  background: var(--surface-2);
-  border-radius: 4px;
-  position: relative;
-  overflow: hidden;
-}
-.steer-center {
-  position: absolute;
-  left: 50%; top: 0;
-  width: 2px; height: 100%;
-  background: var(--border-2);
-  transform: translateX(-50%);
-}
-.steer-fill {
-  position: absolute;
-  height: 100%;
-  background: var(--yellow);
-  top: 0;
-  transition: left .05s linear, width .05s linear;
-}
-
-/* G-forces under inputs */
-.sw-gforces {
-  display: flex;
-  gap: 8px;
-  width: 100%;
-  padding-top: 8px;
-  border-top: 1px solid var(--border);
-}
-.gforce-block { text-align: center; flex: 1; }
-.gforce-label { display: block; font-size: 9px; color: var(--text-dim); letter-spacing: 1px; }
-.gforce-value { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
 
 /* ── Circuit card ────────────────────────────────────────────────────────── */
 .circuit-card {
@@ -453,7 +337,21 @@ html, body {
   position: relative;
   min-height: 360px;
 }
+.circuit-bg-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+  border-radius: 6px;
+  opacity: 0.85;
+  display: none;
+}
+.circuit-bg-img.visible { display: block; }
 #circuit-canvas {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   display: block;
@@ -796,22 +694,20 @@ html, body {
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 @media (max-width: 1400px) {
   .dashboard {
-    grid-template-columns: 200px 1fr 340px 230px;
+    grid-template-columns: 1fr 1fr 340px 230px;
   }
 }
 @media (max-width: 1200px) {
   .dashboard {
-    grid-template-columns: 190px 1fr 300px 210px;
+    grid-template-columns: 1fr 1fr 300px 210px;
   }
-  .sw-container { width: 200px; height: 200px; }
 }
 @media (max-width: 1000px) {
   .dashboard {
     grid-template-columns: 1fr 1fr;
     grid-template-rows: auto auto auto auto auto;
   }
-  .timing-card      { grid-column: 1; grid-row: 1; }
-  .steering-card    { grid-column: 2; grid-row: 1; }
+  .timing-card      { grid-column: 1 / span 2; grid-row: 1; }
   .circuit-card     { grid-column: 1 / span 2; grid-row: 2; }
   .leaderboard-card { grid-column: 1 / span 2; grid-row: 3; }
   .tyre-card        { grid-column: 1; grid-row: 4; }
@@ -821,7 +717,7 @@ html, body {
 }
 @media (max-width: 640px) {
   .dashboard { grid-template-columns: 1fr; }
-  .timing-card, .steering-card, .circuit-card, .leaderboard-card,
+  .timing-card, .circuit-card, .leaderboard-card,
   .tyre-card, .fuel-card, .lap-recorder-card { grid-column: 1; grid-row: unset; }
   .topbar-info .info-chip:nth-child(n+3) { display: none; }
 }
