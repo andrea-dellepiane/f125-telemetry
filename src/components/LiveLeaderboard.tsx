@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { LeaderboardService } from '../services/leaderboardService';
+import { LeaderboardService } from '../services/LeaderboardService';
 
 const leaderboard = new LeaderboardService(); // in app reale, usare singleton/DI
 
