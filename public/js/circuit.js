@@ -10,6 +10,8 @@
   const PLAYER_RADIUS    = 7;
   const RIVAL_RADIUS     = 4;
   const PADDING          = 20;
+  const MIN_TRACE_POINTS_FOR_UPDATE = 10;  // min points needed to accept trace data
+  const MIN_TRACE_POINTS_FOR_BB     = 50;  // min points needed to compute a reliable bounding box
 
   // trackId → circuit image filename
   const TRACK_IMAGES = {
@@ -78,7 +80,7 @@
 
   // ── Public API ───────────────────────────────────────────────────────────
   function updateTrace(points) {
-    if (!Array.isArray(points) || points.length < 10) return;
+    if (!Array.isArray(points) || points.length < MIN_TRACE_POINTS_FOR_UPDATE) return;
     trace   = points;
     bbDirty = true;
   }
@@ -138,7 +140,7 @@
   function recomputeBB() {
     if (!bbDirty) return;
     // Prefer real telemetry data for accurate BB; it requires enough points
-    if (trace.length >= 50) {
+    if (trace.length >= MIN_TRACE_POINTS_FOR_BB) {
       computeBB(trace);
     } else {
       bbDirty = false;
