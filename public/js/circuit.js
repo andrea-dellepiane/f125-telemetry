@@ -1,32 +1,56 @@
 'use strict';
 /**
  * Circuit canvas – renders the F1 track map with:
- * - Predefined circuit layout (when track is known)
- * - Live telemetry trace overlay
- * - All car positions with team colours
- * - Start/finish line, sector markers
+ * - Real circuit image as background (from /circuits/ folder)
+ * - All car positions with team colours overlaid on the image
+ * - Car positions mapped using live telemetry bounding box
  */
 (function () {
 
-  const TRACK_WIDTH      = 14;  // px for track outline
-  const TRACE_WIDTH      = 4;   // px for live racing line
   const PLAYER_RADIUS    = 7;
   const RIVAL_RADIUS     = 4;
-  const PADDING          = 32;
-  const TRACE_HISTORY    = 15000;
+  const PADDING          = 20;
+  const MIN_TRACE_POINTS_FOR_UPDATE = 10;  // min points needed to accept trace data
+  const MIN_TRACE_POINTS_FOR_BB     = 50;  // min points needed to compute a reliable bounding box
+
+  // trackId → circuit image filename
+  const TRACK_IMAGES = {
+    0:  'Australia_Circuit.avif',       // Melbourne
+    2:  'China_Circuit.avif',           // Shanghai
+    3:  'Bahrain_Circuit.avif',         // Sakhir
+    4:  'Spain_Circuit.avif',           // Catalunya
+    5:  'Monaco_Circuit.avif',          // Monaco
+    6:  'Canada_Circuit.avif',          // Montreal
+    7:  'Great_Britain_Circuit.avif',   // Silverstone
+    9:  'Hungary_Circuit.avif',         // Hungaroring
+    10: 'Belgium_Circuit.avif',         // Spa
+    11: 'Italy_Circuit.avif',           // Monza
+    12: 'Singapore_Circuit.avif',       // Singapore
+    13: 'Japan_Circuit.avif',           // Suzuka
+    14: 'Abu_Dhabi_Circuit.avif',       // Yas Marina
+    15: 'USA_Circuit.avif',             // Austin (COTA)
+    17: 'Austria_Circuit.avif',         // Red Bull Ring
+    18: 'Brazil_Circuit.avif',          // Interlagos
+    20: 'Baku_Circuit.avif',            // Baku
+    26: 'Netherlands_Circuit.avif',     // Zandvoort
+    27: 'Emilia_Romagna_Circuit.avif',  // Imola
+    29: 'Saudi_Arabia_Circuit.avif',    // Jeddah
+    30: 'Miami_Circuit.avif',           // Miami
+    31: 'Las_Vegas_Circuit.avif',       // Las Vegas
+    32: 'Qatar_Circuit.avif',           // Lusail
+    33: 'Mexico_Circuit.avif',          // Mexico City
+  };
 
   // Team colour lookup (carIndex → CSS colour)
   const TEAM_COLOURS = {};
   const PARTICIPANTS = {};
 
-  let canvas   = null;
-  let ctx      = null;
-  let trackId  = -1;
+  let canvas    = null;
+  let ctx       = null;
+  let circuitImgEl = null;
+  let trackId   = -1;
 
-  // Predefined circuit points (from circuits-data.js)
-  let predefPts = null;
-
-  // Live trace (accumulated GPS points)
+  // Live trace used only to build a bounding box from real GPS data
   let trace     = [];
   let allCars   = [];
   let playerX   = null;
@@ -34,11 +58,13 @@
 
   let bb        = { minX: -600, maxX: 600, minZ: -350, maxZ: 350 };
   let bbDirty   = true;
+  let bbReady   = false;  // true once we have a real-data BB
 
   // ── Init ─────────────────────────────────────────────────────────────────
   function init(canvasEl) {
-    canvas = canvasEl;
-    ctx    = canvas.getContext('2d');
+    canvas       = canvasEl;
+    ctx          = canvas.getContext('2d');
+    circuitImgEl = document.getElementById('circuit-img');
     window.addEventListener('resize', onResize);
     onResize();
     requestAnimationFrame(drawLoop);
@@ -54,7 +80,7 @@
 
   // ── Public API ───────────────────────────────────────────────────────────
   function updateTrace(points) {
-    if (!Array.isArray(points)) return;
+    if (!Array.isArray(points) || points.length < MIN_TRACE_POINTS_FOR_UPDATE) return;
     trace   = points;
     bbDirty = true;
   }
@@ -66,14 +92,21 @@
 
   function setTrackId(id) {
     if (id === trackId) return;
-    trackId   = id;
-    predefPts = null;
-    trace     = [];  // reset trace when changing track
-    bbDirty   = true;
+    trackId  = id;
+    trace    = [];   // reset trace on track change
+    bbReady  = false;
+    bbDirty  = true;
 
-    if (window.F1CircuitData) {
-      predefPts = window.F1CircuitData[id] || window.F1CircuitData._fallback || null;
-      bbDirty   = true;
+    // Show the circuit background image if available
+    if (circuitImgEl) {
+      const imgName = TRACK_IMAGES[id];
+      if (imgName) {
+        circuitImgEl.src = `/circuits/${imgName}`;
+        circuitImgEl.classList.add('visible');
+      } else {
+        circuitImgEl.src = '';
+        circuitImgEl.classList.remove('visible');
+      }
     }
   }
 
@@ -96,21 +129,25 @@
       if (p.z < minZ) minZ = p.z;
       if (p.z > maxZ) maxZ = p.z;
     }
-    const marginX = (maxX - minX) * 0.08 + 30;
-    const marginZ = (maxZ - minZ) * 0.08 + 30;
+    const marginX = (maxX - minX) * 0.1 + 30;
+    const marginZ = (maxZ - minZ) * 0.1 + 30;
     bb = { minX: minX - marginX, maxX: maxX + marginX,
            minZ: minZ - marginZ, maxZ: maxZ + marginZ };
     bbDirty = false;
+    bbReady = true;
   }
 
   function recomputeBB() {
     if (!bbDirty) return;
-    const activePts = predefPts || (trace.length >= 2 ? trace : null);
-    if (activePts) computeBB(activePts);
-    else bbDirty = false;
+    // Prefer real telemetry data for accurate BB; it requires enough points
+    if (trace.length >= MIN_TRACE_POINTS_FOR_BB) {
+      computeBB(trace);
+    } else {
+      bbDirty = false;
+    }
   }
 
-  // World → canvas
+  // World → canvas (maps real-world GPS coords to canvas pixels)
   function w2c(wx, wz) {
     const W = canvas.width, H = canvas.height;
     const scaleX = (W - PADDING * 2) / (bb.maxX - bb.minX);
@@ -130,37 +167,18 @@
     draw();
   }
 
-  function drawPath(pts, lineWidth, strokeStyle, lineDash) {
-    if (!pts || pts.length < 2) return;
-    ctx.beginPath();
-    ctx.setLineDash(lineDash || []);
-    const { cx, cy } = w2c(pts[0].x, pts[0].z);
-    ctx.moveTo(cx, cy);
-    for (let i = 1; i < pts.length; i++) {
-      const p = w2c(pts[i].x, pts[i].z);
-      ctx.lineTo(p.cx, p.cy);
-    }
-    ctx.strokeStyle = strokeStyle;
-    ctx.lineWidth   = lineWidth;
-    ctx.lineCap     = 'round';
-    ctx.lineJoin    = 'round';
-    ctx.stroke();
-    ctx.setLineDash([]);
-  }
-
   function draw() {
     const W = canvas.width, H = canvas.height;
     ctx.clearRect(0, 0, W, H);
 
-    // Background
-    ctx.fillStyle = '#070710';
-    ctx.fillRect(0, 0, W, H);
-
     recomputeBB();
 
-    const hasPts = predefPts || trace.length >= 2;
+    const hasImage = circuitImgEl && circuitImgEl.classList.contains('visible');
 
-    if (!hasPts) {
+    if (!hasImage) {
+      // No circuit image: dark background with waiting message
+      ctx.fillStyle = '#070710';
+      ctx.fillRect(0, 0, W, H);
       ctx.fillStyle = '#2a2a4a';
       ctx.font = '13px "Segoe UI", sans-serif';
       ctx.textAlign = 'center';
@@ -169,38 +187,12 @@
       return;
     }
 
-    // ── Track outline (predefined or live trace) ──────────────────────────
-    const basePts = predefPts || trace;
+    // Transparent canvas – the circuit image is the background (shown via CSS <img>)
+    // We only draw the car position dots on the canvas overlay
 
-    // Wide grey track surface
-    drawPath(basePts, TRACK_WIDTH + 6, '#1e1e2e');
-    // Track kerb/edges
-    drawPath(basePts, TRACK_WIDTH + 2, '#2e3a5a');
-    // Track surface
-    drawPath(basePts, TRACK_WIDTH - 2, '#2a3050');
-    // Centre line
-    drawPath(basePts, 1.5, '#3a3a5a', [8, 8]);
-
-    // ── Live trace overlay ────────────────────────────────────────────────
-    if (trace.length >= 2) {
-      // Colour trace by speed (not available here, so use gradient by position)
-      drawPath(trace, TRACE_WIDTH, 'rgba(59,110,200,0.8)');
-    }
-
-    // ── Start/Finish line (at first point of predefined data) ─────────────
-    if (predefPts && predefPts.length > 2) {
-      const sp = w2c(predefPts[0].x, predefPts[0].z);
-      const np = w2c(predefPts[2].x, predefPts[2].z);
-      const angle = Math.atan2(np.cy - sp.cy, np.cx - sp.cx) + Math.PI / 2;
-      ctx.save();
-      ctx.translate(sp.cx, sp.cy);
-      ctx.rotate(angle);
-      ctx.fillStyle = '#ffffff';
-      for (let i = 0; i < 6; i++) {
-        ctx.fillStyle = i % 2 === 0 ? '#ffffff' : '#000000';
-        ctx.fillRect(-6 + i * 2, -1, 2, 9);
-      }
-      ctx.restore();
+    if (!bbReady) {
+      // Waiting for enough telemetry to build bounding box
+      return;
     }
 
     // ── Rival cars ────────────────────────────────────────────────────────
@@ -213,7 +205,7 @@
       ctx.fillStyle = colour + 'cc';
       ctx.fill();
       ctx.strokeStyle = colour;
-      ctx.lineWidth   = 1;
+      ctx.lineWidth   = 1.5;
       ctx.stroke();
     });
 
@@ -245,3 +237,4 @@
   // ── Export ────────────────────────────────────────────────────────────────
   window.CircuitMap = { init, updateTrace, updateCars, setTrackId, setParticipants };
 })();
+
