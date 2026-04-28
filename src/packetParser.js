@@ -39,6 +39,11 @@ const PACKET_ID = {
   MOTION_EX:   13,
 };
 
+const LAP_DATA_SIZE = 57; // bytes per car in F1 25
+const CAR_TELEMETRY_SIZE = 60; // bytes per car
+const CAR_STATUS_SIZE = 55; // bytes per car
+const PARTICIPANT_DATA_SIZE = 57; // bytes per car
+
 /** Header is 29 bytes at the start of every packet */
 function parseHeader(buf) {
   if (buf.length < 29) return null;
@@ -96,6 +101,7 @@ function parseMotion(buf, headerOffset, playerCarIndex) {
   return {
     type: 'motion',
     data: {
+      playerCarIndex,
       playerCar: player || {},
       allCars: cars.map((c, i) => ({
         carIndex: i, x: c.worldPositionX, z: c.worldPositionZ })),
@@ -128,14 +134,15 @@ function parseSession(buf, o) {
   const networkGame       = buf.readUInt8(o);    o += 1;
   // Skip weather forecast samples prefix (numWeatherForecastSamples uint8)
   const numWeatherForecastSamples = buf.readUInt8(o); o += 1;
-  // Skip weather forecast samples (56 * 8 = 448 bytes)
-  o += 448;
+  // Skip weather forecast samples (64 * 8 = 512 bytes)
+  o += 512;
   /* forecastAccuracy */ o += 1;
   const aiDifficulty      = buf.readUInt8(o);    o += 1;
   // Skip link identifiers (3 * uint32 = 12 bytes)
   o += 12;
-  // Skip pit stop window / rejoin (3 bytes)
-  o += 3;
+  const pitStopWindowIdealLap  = buf.readUInt8(o); o += 1;
+  const pitStopWindowLatestLap = buf.readUInt8(o); o += 1;
+  const pitStopRejoinPosition  = buf.readUInt8(o); o += 1;
   // Skip assist flags (9 bytes)
   o += 9;
   const gameMode          = buf.readUInt8(o);    o += 1;
@@ -149,18 +156,16 @@ function parseSession(buf, o) {
       sessionType, trackId, formula, sessionTimeLeft, sessionDuration,
       pitSpeedLimit, gamePaused, isSpectating, spectatorCarIndex,
       numMarshalZones, safetyCarStatus, networkGame, aiDifficulty,
+      pitStopWindowIdealLap, pitStopWindowLatestLap, pitStopRejoinPosition,
       gameMode, timeOfDay,
     },
   };
 }
 
 // ─── Lap Data (ID 2) ─────────────────────────────────────────────────────────
-const LAP_DATA_SIZE = 57; // bytes per car in F1 24/25
-
-function parseLapData(buf, headerOffset, playerCarIndex) {
-  const o = headerOffset + playerCarIndex * LAP_DATA_SIZE;
-  if (o + LAP_DATA_SIZE > buf.length) return null;
-  let p = o;
+function readLapDataAt(buf, offset, carIndex) {
+  if (offset + LAP_DATA_SIZE > buf.length) return null;
+  let p = offset;
 
   const lastLapTimeInMS          = buf.readUInt32LE(p); p += 4;
   const currentLapTimeInMS       = buf.readUInt32LE(p); p += 4;
@@ -195,27 +200,48 @@ function parseLapData(buf, headerOffset, playerCarIndex) {
   const speedTrapFastestLap      = buf.readUInt8(p);    p += 1;
 
   return {
+    carIndex,
+    lastLapTimeInMS, currentLapTimeInMS,
+    sector1TimeInMS, sector1TimeMinutes,
+    sector2TimeInMS, sector2TimeMinutes,
+    deltaToCarInFrontInMS, deltaToRaceLeaderInMS,
+    lapDistance, totalDistance, safetyCarDelta,
+    carPosition, currentLapNum, pitStatus, numPitStops,
+    sector, currentLapInvalid, penalties, totalWarnings,
+    cornerCuttingWarnings, numUnservedDriveThroughPens,
+    numUnservedStopGoPens, gridPosition, driverStatus,
+    resultStatus, pitLaneTimerActive, pitLaneTimeInLaneInMS,
+    pitStopTimerInMS, pitStopShouldServePen,
+    speedTrapFastestSpeed, speedTrapFastestLap,
+  };
+}
+
+function parseLapData(buf, headerOffset, playerCarIndex) {
+  const cars = [];
+  for (let i = 0; i < 22; i++) {
+    const carData = readLapDataAt(buf, headerOffset + i * LAP_DATA_SIZE, i);
+    if (carData) cars.push(carData);
+  }
+  if (!cars.length) return null;
+
+  const player = cars[playerCarIndex] || cars[0];
+  const trailerOffset = headerOffset + LAP_DATA_SIZE * 22;
+  const timeTrialPBCarIdx = trailerOffset < buf.length ? buf.readUInt8(trailerOffset) : 255;
+  const timeTrialRivalCarIdx = trailerOffset + 1 < buf.length ? buf.readUInt8(trailerOffset + 1) : 255;
+
+  return {
     type: 'lapData',
     data: {
-      lastLapTimeInMS, currentLapTimeInMS,
-      sector1TimeInMS, sector1TimeMinutes,
-      sector2TimeInMS, sector2TimeMinutes,
-      deltaToCarInFrontInMS, deltaToRaceLeaderInMS,
-      lapDistance, totalDistance, safetyCarDelta,
-      carPosition, currentLapNum, pitStatus, numPitStops,
-      sector, currentLapInvalid, penalties, totalWarnings,
-      cornerCuttingWarnings, numUnservedDriveThroughPens,
-      numUnservedStopGoPens, gridPosition, driverStatus,
-      resultStatus, pitLaneTimerActive, pitLaneTimeInLaneInMS,
-      pitStopTimerInMS, pitStopShouldServePen,
-      speedTrapFastestSpeed, speedTrapFastestLap,
+      playerCarIndex,
+      player,
+      cars,
+      timeTrialPBCarIdx,
+      timeTrialRivalCarIdx,
     },
   };
 }
 
 // ─── Car Telemetry (ID 6) ────────────────────────────────────────────────────
-const CAR_TELEMETRY_SIZE = 60; // bytes per car
-
 function parseCarTelemetry(buf, headerOffset, playerCarIndex) {
   const o = headerOffset + playerCarIndex * CAR_TELEMETRY_SIZE;
   if (o + CAR_TELEMETRY_SIZE > buf.length) return null;
@@ -252,6 +278,7 @@ function parseCarTelemetry(buf, headerOffset, playerCarIndex) {
   return {
     type: 'carTelemetry',
     data: {
+      playerCarIndex,
       player: {
         speed, throttle, steer, brake, clutch, gear, engineRPM, drs,
         revLightsPercent, revLightsBitValue, brakesTemperature,
@@ -263,12 +290,9 @@ function parseCarTelemetry(buf, headerOffset, playerCarIndex) {
 }
 
 // ─── Car Status (ID 7) ───────────────────────────────────────────────────────
-const CAR_STATUS_SIZE = 55; // bytes per car
-
-function parseCarStatus(buf, headerOffset, playerCarIndex) {
-  const o = headerOffset + playerCarIndex * CAR_STATUS_SIZE;
-  if (o + CAR_STATUS_SIZE > buf.length) return null;
-  let p = o;
+function readCarStatusAt(buf, offset, carIndex) {
+  if (offset + CAR_STATUS_SIZE > buf.length) return null;
+  let p = offset;
 
   const tractionControl       = buf.readUInt8(p);  p += 1;
   const antiLockBrakes        = buf.readUInt8(p);  p += 1;
@@ -297,17 +321,110 @@ function parseCarStatus(buf, headerOffset, playerCarIndex) {
   const networkPaused         = buf.readUInt8(p);  p += 1;
 
   return {
+    carIndex,
+    tractionControl, antiLockBrakes, fuelMix, frontBrakeBias,
+    pitLimiterStatus, fuelInTank, fuelCapacity, fuelRemainingLaps,
+    maxRPM, idleRPM, maxGears, drsAllowed, drsActivationDistance,
+    actualTyreCompound, visualTyreCompound, tyresAgeLaps, vehicleFiaFlags,
+    enginePowerICE, enginePowerMGUK, ersStoreEnergy, ersDeployMode,
+    ersHarvestedThisLapMGUK, ersHarvestedThisLapMGUH, ersDeployedThisLap,
+    networkPaused,
+  };
+}
+
+function parseCarStatus(buf, headerOffset, playerCarIndex) {
+  const cars = [];
+  for (let i = 0; i < 22; i++) {
+    const carStatus = readCarStatusAt(buf, headerOffset + i * CAR_STATUS_SIZE, i);
+    if (carStatus) cars.push(carStatus);
+  }
+  if (!cars.length) return null;
+
+  return {
     type: 'carStatus',
     data: {
-      player: {
-        tractionControl, antiLockBrakes, fuelMix, frontBrakeBias,
-        pitLimiterStatus, fuelInTank, fuelCapacity, fuelRemainingLaps,
-        maxRPM, idleRPM, maxGears, drsAllowed, drsActivationDistance,
-        actualTyreCompound, visualTyreCompound, tyresAgeLaps, vehicleFiaFlags,
-        enginePowerICE, enginePowerMGUK, ersStoreEnergy, ersDeployMode,
-        ersHarvestedThisLapMGUK, ersHarvestedThisLapMGUH, ersDeployedThisLap,
-        networkPaused,
-      },
+      playerCarIndex,
+      player: cars[playerCarIndex] || cars[0],
+      cars,
+    },
+  };
+}
+
+// ─── Participants (ID 4) ─────────────────────────────────────────────────────
+function readUtf8CString(buf, offset, length) {
+  const slice = buf.subarray(offset, offset + length);
+  const zeroIdx = slice.indexOf(0);
+  return slice.subarray(0, zeroIdx === -1 ? length : zeroIdx).toString('utf8').trim();
+}
+
+function driverCodeFromName(name, raceNumber) {
+  const clean = (name || '').replace(/[^\p{L}\p{N}\s'-]/gu, '').trim();
+  if (!clean) return String(raceNumber || 0).padStart(2, '0');
+  const parts = clean.split(/\s+/).filter(Boolean);
+  const source = (parts[parts.length - 1] || parts[0]).replace(/[^A-Za-z0-9]/g, '');
+  return (source.slice(0, 3) || clean.slice(0, 3)).toUpperCase();
+}
+
+function parseParticipants(buf, headerOffset, playerCarIndex) {
+  if (headerOffset >= buf.length) return null;
+  let o = headerOffset;
+  const numActiveCars = buf.readUInt8(o); o += 1;
+  const participants = [];
+
+  for (let i = 0; i < 22; i++) {
+    if (o + PARTICIPANT_DATA_SIZE > buf.length) break;
+    const aiControlled = buf.readUInt8(o); o += 1;
+    const driverId     = buf.readUInt8(o); o += 1;
+    const networkId    = buf.readUInt8(o); o += 1;
+    const teamId       = buf.readUInt8(o); o += 1;
+    const myTeam       = buf.readUInt8(o); o += 1;
+    const raceNumber   = buf.readUInt8(o); o += 1;
+    const nationality  = buf.readUInt8(o); o += 1;
+    const driverName   = readUtf8CString(buf, o, 32); o += 32;
+    const yourTelemetry = buf.readUInt8(o); o += 1;
+    const showOnlineNames = buf.readUInt8(o); o += 1;
+    const techLevel    = buf.readUInt16LE(o); o += 2;
+    const platform     = buf.readUInt8(o); o += 1;
+    const numColours   = buf.readUInt8(o); o += 1;
+    const liveryColours = [];
+    for (let c = 0; c < 4; c++) {
+      const red = buf.readUInt8(o); o += 1;
+      const green = buf.readUInt8(o); o += 1;
+      const blue = buf.readUInt8(o); o += 1;
+      liveryColours.push({ red, green, blue });
+    }
+
+    const primaryColour = liveryColours[0] || { red: 136, green: 136, blue: 136 };
+    const teamColor = `#${[primaryColour.red, primaryColour.green, primaryColour.blue]
+      .map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+
+    participants.push({
+      carIndex: i,
+      aiControlled,
+      driverId,
+      networkId,
+      teamId,
+      myTeam,
+      raceNumber,
+      nationality,
+      driverName,
+      driverCode: driverCodeFromName(driverName, raceNumber),
+      yourTelemetry,
+      showOnlineNames,
+      techLevel,
+      platform,
+      numColours,
+      liveryColours,
+      teamColor,
+    });
+  }
+
+  return {
+    type: 'participants',
+    data: {
+      playerCarIndex,
+      numActiveCars,
+      participants,
     },
   };
 }
@@ -334,6 +451,8 @@ function parsePacket(buf) {
       return withHeader(parseSession(buf, offset));
     case PACKET_ID.LAP_DATA:
       return withHeader(parseLapData(buf, offset, playerCarIndex));
+    case PACKET_ID.PARTICIPANTS:
+      return withHeader(parseParticipants(buf, offset, playerCarIndex));
     case PACKET_ID.CAR_TELEMETRY:
       return withHeader(parseCarTelemetry(buf, offset, playerCarIndex));
     case PACKET_ID.CAR_STATUS:

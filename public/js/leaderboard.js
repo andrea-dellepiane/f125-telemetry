@@ -13,9 +13,6 @@
     7:  { label: 'I', cls: 'tyre-i' },
     8:  { label: 'W', cls: 'tyre-w' },
   };
-
-  let lastCars = [];
-
   function msToGap(ms) {
     if (ms <= 0) return 'Leader';
     if (ms >= 60000) return `+${(ms / 60000).toFixed(1)}L`;
@@ -34,22 +31,18 @@
     const container = document.getElementById('leaderboard-rows');
     if (!container) return;
 
-    lastCars = cars;
-
     // Clear
     container.innerHTML = '';
 
     cars.forEach((car, i) => {
       const pos = car.position || i + 1;
       const tyre = TYRE_SYMBOLS[car.tyreCompound] || { label: '?', cls: '' };
-      const isPlayer = car.carIndex === 0;
-      const inPit    = car.pitStatus > 0;
+      const isPlayer = !!car.isPlayer;
 
       const row = document.createElement('div');
       row.className = 'lb-row' +
         (isPlayer ? ' lb-player' : '') +
-        (car.hasFastestLap ? ' lb-fastest' : '') +
-        (inPit ? ' lb-inpit' : '');
+        (car.hasFastestLap ? ' lb-fastest' : '');
       row.dataset.carIndex = car.carIndex;
 
       // Position
@@ -65,7 +58,7 @@
       // Driver code
       const codeEl = document.createElement('span');
       codeEl.className = 'lb-code';
-      codeEl.textContent = car.driverCode || '???';
+      codeEl.textContent = `${car.hasFastestLap ? '🟣 ' : ''}${car.driverCode || '???'}`;
 
       // Tyre badge
       const tyreEl = document.createElement('span');
@@ -75,26 +68,12 @@
       // Gap
       const gapEl = document.createElement('span');
       gapEl.className = 'lb-gap';
-      if (inPit) {
-        gapEl.textContent = 'PIT';
-        gapEl.classList.add('lb-gap-pit');
-      } else {
-        gapEl.textContent = msToGap(car.gapToLeaderMs || 0);
-      }
+      gapEl.textContent = msToGap(car.gapToLeaderMs || 0);
 
       row.appendChild(posEl);
       row.appendChild(colBar);
       row.appendChild(codeEl);
       row.appendChild(tyreEl);
-
-      // Fastest lap indicator (before gap)
-      if (car.hasFastestLap) {
-        const flEl = document.createElement('span');
-        flEl.className = 'lb-fl';
-        flEl.title = `Fastest: ${msToLapTime(car.bestLapTimeInMS)}`;
-        flEl.textContent = '🟣';
-        row.appendChild(flEl);
-      }
 
       row.appendChild(gapEl);
 

@@ -74,6 +74,9 @@ function initCarStates() {
     pitCountdown: 0,
     pitStopDone:  false,
     pitStopLap:   Math.min(45, 12 + Math.floor(Math.random() * 8) + i * 2),
+    tyreAgeLaps:  0,
+    currentCompound: i % 3 === 0 ? 17 : 16,
+    nextCompound: i % 2 === 0 ? 18 : 17,
     penalties:    0,
     hasFastestLap: false,
   }));
@@ -106,13 +109,22 @@ function tick() {
     if (!cs.pitStopDone && cs.lapNum === cs.pitStopLap && cs.pitStatus === 0) {
       if (cs.simIdx > LAP_STEPS * 0.8) {
         cs.pitStatus    = 1;
-        cs.pitCountdown = 250;
+        cs.pitCountdown = 55;
       }
     }
 
     if (cs.pitStatus > 0) {
       cs.pitCountdown--;
-      if (cs.pitCountdown <= 0) {
+      if (cs.pitStatus === 1 && cs.pitCountdown <= 0) {
+        cs.pitStatus = 2;
+        cs.pitCountdown = 95;
+      } else if (cs.pitStatus === 2 && cs.pitCountdown <= 0) {
+        cs.pitStatus = 3;
+        cs.pitCountdown = 55;
+        cs.currentCompound = cs.nextCompound;
+        cs.nextCompound = cs.currentCompound === 18 ? 16 : 18;
+        cs.tyreAgeLaps = 0;
+      } else if (cs.pitStatus === 3 && cs.pitCountdown <= 0) {
         cs.pitStatus   = 0;
         cs.pitStopDone = true;
         cs.numPitStops++;
@@ -138,6 +150,7 @@ function tick() {
       }
       cs.lapNum++;
       cs.lapStartTime = Date.now();
+      cs.tyreAgeLaps++;
     }
   });
 
@@ -212,17 +225,48 @@ function tick() {
       totalDistance:         (playerState.lapNum - 1) * 5793 + progress * 5793,
       safetyCarDelta: 0, carPosition: 1,
       currentLapNum:  playerState.lapNum,
-      pitStatus:      playerState.pitStatus,
+      pitStatus:      playerState.pitStatus === 3 ? 1 : playerState.pitStatus,
       numPitStops:    playerState.numPitStops,
       sector, currentLapInvalid: 0, penalties: playerState.penalties,
       totalWarnings: 0, cornerCuttingWarnings: 0,
       numUnservedDriveThroughPens: 0, numUnservedStopGoPens: 0,
       gridPosition: 1, driverStatus: 4, resultStatus: 2,
+      pitLaneTimerActive: playerState.pitStatus > 0 ? 1 : 0,
+      pitLaneTimeInLaneInMS: playerState.pitStatus > 0 ? Math.round((Date.now() - playerState.lapStartTime) / 4) : 0,
     },
   });
 
   if (totalLapCount % 30 === 0) {
     const fuelConsumed = playerState.lapNum * 1.7;
+    const allCarStatusCars = carStates.map((cs) => ({
+      carIndex: cs.carIndex,
+      tractionControl: 0,
+      antiLockBrakes: 0,
+      fuelMix: 1,
+      frontBrakeBias: 56,
+      pitLimiterStatus: cs.pitStatus > 0 ? 1 : 0,
+      fuelInTank: Math.max(0, 110 - (cs.lapNum * 1.7)),
+      fuelCapacity: 110,
+      fuelRemainingLaps: Math.max(0, 50 - cs.lapNum + 1),
+      maxRPM: 15000,
+      idleRPM: 4500,
+      maxGears: 8,
+      drsAllowed: 1,
+      drsActivationDistance: 0,
+      actualTyreCompound: cs.currentCompound,
+      visualTyreCompound: cs.currentCompound,
+      tyresAgeLaps: cs.tyreAgeLaps,
+      vehicleFiaFlags: 0,
+      enginePowerICE: 600000,
+      enginePowerMGUK: 120000,
+      ersStoreEnergy: clamp(4000000 * (0.3 + 0.7 * (1 - (cs.simIdx / LAP_STEPS))), 0, 4000000),
+      ersDeployMode: 1,
+      ersHarvestedThisLapMGUK: 0,
+      ersHarvestedThisLapMGUH: 0,
+      ersDeployedThisLap: 0,
+      networkPaused: 0,
+    }));
+
     updateState({
       type: 'carStatus',
       data: {
@@ -234,8 +278,9 @@ function tick() {
           fuelRemainingLaps: Math.max(0, 50 - playerState.lapNum + 1),
           maxRPM: 15000, idleRPM: 4500, maxGears: 8,
           drsAllowed: 1, drsActivationDistance: 0,
-          actualTyreCompound: 16, visualTyreCompound: 16,
-          tyresAgeLaps: playerState.lapNum - 1,
+          actualTyreCompound: playerState.currentCompound,
+          visualTyreCompound: playerState.currentCompound,
+          tyresAgeLaps: playerState.tyreAgeLaps,
           vehicleFiaFlags: 0,
           enginePowerICE: 600000, enginePowerMGUK: 120000,
           ersStoreEnergy:          clamp(4000000 * (0.3 + 0.7 * (1 - progress)), 0, 4000000),
@@ -245,6 +290,7 @@ function tick() {
           ersDeployedThisLap:      progress * 1500000,
           networkPaused: 0,
         },
+        cars: allCarStatusCars,
       },
     });
 
@@ -287,12 +333,12 @@ function tick() {
         lastLapTimeInMS:    cs.lastLapMs,
         bestLapTimeInMS:    cs.bestLapMs < Infinity ? cs.bestLapMs : 0,
         lapDistance:   (cs.simIdx / LAP_STEPS) * 5793,
-        pitStatus:     cs.pitStatus,
+        pitStatus:     cs.pitStatus === 3 ? 1 : cs.pitStatus,
         numPitStops:   cs.numPitStops,
         penalties:     cs.penalties,
         hasFastestLap: cs.hasFastestLap,
         gapToLeaderMs: gapMs,
-        tyreCompound:  cs.numPitStops > 0 ? 18 : 16,
+        tyreCompound:  cs.currentCompound,
       };
     });
 
@@ -320,13 +366,13 @@ function startSimulator(onPacket, intervalMs = 80) {
     tick();
     const state = require('./state').getState();
     onPacket('motion',       state.motion);
-    onPacket('carTelemetry', { player: state.playerTelemetry });
-    onPacket('lapData',      state.lapData);
-    onPacket('carStatus',    { player: state.playerStatus });
+    onPacket('carTelemetry', { playerCarIndex: state.playerCarIndex, player: state.playerTelemetry });
+    onPacket('lapData',      { playerCarIndex: state.playerCarIndex, player: state.lapData, cars: state.allLapData });
+    onPacket('carStatus',    { playerCarIndex: state.playerCarIndex, player: state.playerStatus, cars: state.allCarStatus });
     onPacket('session',      state.session);
     onPacket('trackTrace',   state.trackTrace);
     if (state.allLapData.length)   onPacket('allLapData',   { cars: state.allLapData });
-    if (state.participants.length) onPacket('participants',  { participants: state.participants, teams: TEAMS });
+    if (state.participants.length) onPacket('participants',  { playerCarIndex: state.playerCarIndex, participants: state.participants, teams: TEAMS });
   }, intervalMs);
 }
 

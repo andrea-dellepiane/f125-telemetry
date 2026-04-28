@@ -42,15 +42,6 @@
   </div>
 </header>
 
-<!-- ══ PIT NOTIFICATION ══════════════════════════════════════════════════════ -->
-<div class="pit-notification" id="pit-notification" style="display:none">
-  <span class="pit-notif-icon">🔧</span>
-  <div class="pit-notif-body">
-    <strong>PIT STOP</strong>
-    <span id="pit-notif-text">Cambio gomme in corso…</span>
-  </div>
-</div>
-
 <!-- ══ MAIN GRID ═════════════════════════════════════════════════════════════ -->
 <main class="dashboard">
 
@@ -121,7 +112,6 @@
       </div>
       <div class="car-stat-block car-stat-badges">
         <span class="qs-badge drs-badge-qs" id="qs-drs">DRS</span>
-        <span class="qs-badge pit-badge-qs" id="qs-pit">PIT</span>
       </div>
     </div>
 
@@ -135,6 +125,15 @@
         <label>Freno</label>
         <div class="bar-track red-track"><div class="bar-fill" id="sw-brake-bar"></div></div>
         <span id="sw-brake-pct" class="input-pct">0%</span>
+      </div>
+      <div class="input-item">
+        <label>Sterzo</label>
+        <div class="bar-track steer-track">
+          <div class="steer-fill steer-fill-left" id="sw-steer-left-bar"></div>
+          <div class="steer-fill steer-fill-right" id="sw-steer-right-bar"></div>
+          <div class="steer-center-line"></div>
+        </div>
+        <span id="sw-steer-pct" class="input-pct">0%</span>
       </div>
     </div>
   </section>
@@ -265,6 +264,29 @@
       <div class="misc-item">
         <span class="misc-label">Bandiera</span>
         <span class="misc-value flag-indicator" id="fia-flag">–</span>
+      </div>
+    </div>
+
+    <div class="pit-strategy-panel" id="pit-strategy-panel">
+      <div class="pit-strategy-head">
+        <span class="pit-strategy-title">Strategia Pit</span>
+        <span class="pit-strategy-badge neutral" id="pit-advice-badge">Wait</span>
+      </div>
+      <div class="pit-strategy-summary" id="pit-advice-summary">
+        Servono ancora pochi dati per calcolare la finestra box.
+      </div>
+      <div class="pit-strategy-meta">
+        <div class="pit-strategy-item">
+          <span>Giro consigliato</span>
+          <strong id="pit-advice-lap">–</strong>
+        </div>
+        <div class="pit-strategy-item">
+          <span>Finestra</span>
+          <strong id="pit-advice-window">In raccolta</strong>
+        </div>
+      </div>
+      <div class="pit-strategy-reason" id="pit-advice-reason">
+        Monitoro compound, eta gomme, passo recente, temperatura e traffico.
       </div>
     </div>
   </section>

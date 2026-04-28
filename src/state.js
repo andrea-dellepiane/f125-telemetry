@@ -5,6 +5,8 @@
  */
 
 let state = {
+  playerCarIndex: 0,
+
   session: {
     packetFormat: null,
     gameYear: null,
@@ -17,6 +19,9 @@ let state = {
     trackId: -1,
     sessionTimeLeft: 0,
     sessionDuration: 0,
+    pitStopWindowIdealLap: 0,
+    pitStopWindowLatestLap: 0,
+    pitStopRejoinPosition: 0,
     safetyCarStatus: 0,   // 0=None,1=Full,2=Virtual,3=Formation Lap
     networkGame: 0,
     timeOfDay: 0,
@@ -105,6 +110,9 @@ let state = {
   // Per-car lap data (positions, gaps, penalties, pit status…)
   allLapData: [],
 
+  // Per-car status (compound, tyre age, limiter, fuel, ERS...)
+  allCarStatus: [],
+
   connected: false,
   lastUpdated: null,
 };
@@ -118,14 +126,41 @@ function getState() {
  * @param {{ type: string, data: object }} result
  */
 function updateState(result) {
+  if (result && result.header && Number.isInteger(result.header.playerCarIndex)) {
+    state.playerCarIndex = result.header.playerCarIndex;
+  }
+
   switch (result.type) {
     case 'session':
-      Object.assign(state.session, result.data);
-      state.connected = true;
+      {
+        const previousTrackId = state.session.trackId;
+        const previousSessionType = state.session.sessionType;
+        const previousSessionTimeLeft = state.session.sessionTimeLeft;
+
+        Object.assign(state.session, result.data);
+        state.connected = true;
+
+        const trackChanged =
+          Number.isInteger(result.data.trackId) &&
+          previousTrackId !== result.data.trackId;
+        const sessionTypeChanged =
+          Number.isInteger(result.data.sessionType) &&
+          previousSessionType !== result.data.sessionType;
+        const sessionRestarted =
+          typeof result.data.sessionTimeLeft === 'number' &&
+          typeof previousSessionTimeLeft === 'number' &&
+          previousSessionTimeLeft > 0 &&
+          result.data.sessionTimeLeft > previousSessionTimeLeft + 20;
+
+        if (trackChanged || sessionTypeChanged || sessionRestarted) {
+          state.trackTrace = [];
+        }
+      }
       break;
 
     case 'lapData':
-      Object.assign(state.lapData, result.data);
+      Object.assign(state.lapData, result.data.player || result.data);
+      if (Array.isArray(result.data.cars)) state.allLapData = result.data.cars;
       break;
 
     case 'carTelemetry':
@@ -133,7 +168,8 @@ function updateState(result) {
       break;
 
     case 'carStatus':
-      Object.assign(state.playerStatus, result.data.player);
+      Object.assign(state.playerStatus, result.data.player || result.data);
+      if (Array.isArray(result.data.cars)) state.allCarStatus = result.data.cars;
       break;
 
     case 'motion': {

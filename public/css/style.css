@@ -96,37 +96,10 @@ html, body {
 .dot.connected { background: var(--green);       box-shadow: 0 0 6px var(--green); }
 .dot.demo      { background: var(--accent-blue);  box-shadow: 0 0 6px var(--accent-blue); }
 
-/* ── PIT notification ────────────────────────────────────────────────────── */
-.pit-notification {
-  position: fixed;
-  top: 58px;
-  right: 12px;
-  z-index: 500;
-  background: #1a1400;
-  border: 2px solid var(--yellow);
-  border-radius: 10px;
-  padding: 10px 16px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  max-width: 280px;
-  box-shadow: 0 0 24px rgba(255,214,0,0.3);
-  opacity: 0;
-  transform: translateX(30px);
-  transition: opacity .3s, transform .3s;
-}
-.pit-notification.visible {
-  opacity: 1;
-  transform: translateX(0);
-}
-.pit-notif-icon { font-size: 22px; }
-.pit-notif-body strong { display: block; font-size: 13px; color: var(--yellow); letter-spacing: 1px; }
-.pit-notif-body span   { font-size: 11px; color: var(--text-dim); }
-
 /* ── Dashboard grid ──────────────────────────────────────────────────────── */
 .dashboard {
   display: grid;
-  grid-template-columns: 1fr 1fr 380px 250px;
+  grid-template-columns: minmax(280px, 1fr) minmax(280px, 1fr) minmax(460px, 1.25fr) 230px;
   grid-template-rows: 1fr auto auto;
   gap: 10px;
   padding: 10px;
@@ -262,23 +235,15 @@ html, body {
   border: 1px solid var(--border-2);
   color: var(--text-dim);
   transition: all .2s;
+  min-width: 56px;
+  text-align: center;
+  white-space: nowrap;
 }
 .drs-badge-qs.active {
   background: var(--green);
   border-color: var(--green);
   color: #000;
   box-shadow: 0 0 8px var(--green);
-}
-.pit-badge-qs.active {
-  background: var(--yellow);
-  border-color: var(--yellow);
-  color: #000;
-  box-shadow: 0 0 8px var(--yellow);
-  animation: pit-pulse 1s ease-in-out infinite;
-}
-@keyframes pit-pulse {
-  0%, 100% { box-shadow: 0 0 8px var(--yellow); }
-  50%       { box-shadow: 0 0 18px var(--yellow); }
 }
 
 /* Input bars in timing card */
@@ -301,7 +266,7 @@ html, body {
   color: var(--text-dim);
   flex-shrink: 0;
 }
-.input-pct { width: 34px; text-align: right; font-size: 10px; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.input-pct { width: 48px; text-align: right; font-size: 10px; font-variant-numeric: tabular-nums; flex-shrink: 0; }
 
 .bar-fill {
   height: 100%;
@@ -313,6 +278,41 @@ html, body {
 .red-track   .bar-fill { background: var(--accent-red); }
 .blue-track  .bar-fill { background: var(--accent-blue); }
 .orange-track .bar-fill{ background: var(--orange); }
+.steer-track {
+  background:
+    linear-gradient(90deg,
+      rgba(59,158,222,0.14) 0%,
+      rgba(59,158,222,0.08) 49.5%,
+      rgba(255,109,0,0.08) 50.5%,
+      rgba(255,109,0,0.14) 100%);
+}
+.steer-fill {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: 0%;
+  transition: width .05s linear;
+}
+.steer-fill-left {
+  right: 50%;
+  background: linear-gradient(90deg, rgba(59,158,222,0.15), var(--accent-blue));
+  border-radius: 4px 0 0 4px;
+}
+.steer-fill-right {
+  left: 50%;
+  background: linear-gradient(90deg, var(--orange), rgba(255,109,0,0.15));
+  border-radius: 0 4px 4px 0;
+}
+.steer-center-line {
+  position: absolute;
+  left: calc(50% - 1px);
+  top: 1px;
+  bottom: 1px;
+  width: 2px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.45);
+  pointer-events: none;
+}
 
 /* ── Circuit card ────────────────────────────────────────────────────────── */
 .circuit-card {
@@ -335,7 +335,12 @@ html, body {
 .canvas-wrap {
   flex: 1;
   position: relative;
-  min-height: 360px;
+  min-height: 430px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.04);
+  background:
+    radial-gradient(circle at top, rgba(255,255,255,0.05), rgba(255,255,255,0) 48%),
+    linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.02));
 }
 .circuit-bg-img {
   position: absolute;
@@ -345,10 +350,8 @@ html, body {
   object-fit: contain;
   object-position: center;
   border-radius: 6px;
-  opacity: 0.85;
   display: none;
 }
-.circuit-bg-img.visible { display: block; }
 #circuit-canvas {
   position: absolute;
   inset: 0;
@@ -356,6 +359,7 @@ html, body {
   height: 100%;
   display: block;
   border-radius: 6px;
+  pointer-events: none;
 }
 
 /* ── Leaderboard card ────────────────────────────────────────────────────── */
@@ -459,11 +463,6 @@ html, body {
   text-align: right;
   white-space: nowrap;
 }
-.lb-gap-pit {
-  color: var(--yellow) !important;
-  font-weight: 700;
-  animation: pit-pulse 1s ease-in-out infinite;
-}
 .lb-penalty {
   font-size: 9px;
   color: var(--yellow);
@@ -477,7 +476,6 @@ html, body {
   color: var(--purple);
   margin-right: 2px;
 }
-.lb-inpit .lb-pos { color: var(--yellow); }
 
 /* ── Tyres card ──────────────────────────────────────────────────────────── */
 .tyre-compound-badge {
@@ -567,6 +565,96 @@ html, body {
 .misc-item { flex: 1; text-align: center; }
 .misc-label { display: block; font-size: 9px; color: var(--text-dim); letter-spacing: 1px; margin-bottom: 3px; text-transform: uppercase; }
 .misc-value { font-size: 14px; font-weight: 700; }
+
+.pit-strategy-panel {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+}
+.pit-strategy-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.pit-strategy-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.pit-strategy-badge {
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  border: 1px solid var(--border-2);
+  background: var(--surface-3);
+  color: var(--text-dim);
+}
+.pit-strategy-badge.good {
+  color: var(--green);
+  border-color: rgba(0,200,83,0.35);
+  background: rgba(0,200,83,0.08);
+}
+.pit-strategy-badge.warn {
+  color: var(--yellow);
+  border-color: rgba(255,214,0,0.35);
+  background: rgba(255,214,0,0.1);
+}
+.pit-strategy-badge.alert {
+  color: #fff;
+  border-color: rgba(225,6,0,0.4);
+  background: rgba(225,6,0,0.18);
+}
+.pit-strategy-badge.neutral {
+  color: var(--accent-blue);
+  border-color: rgba(59,158,222,0.35);
+  background: rgba(59,158,222,0.08);
+}
+.pit-strategy-summary {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text);
+  margin-bottom: 10px;
+}
+.pit-strategy-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.pit-strategy-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+.pit-strategy-item span {
+  font-size: 9px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.pit-strategy-item strong {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text);
+}
+.pit-strategy-reason {
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
 
 .flag-indicator.flag-green  { color: var(--green); }
 .flag-indicator.flag-yellow { color: var(--yellow); }
@@ -694,12 +782,12 @@ html, body {
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 @media (max-width: 1400px) {
   .dashboard {
-    grid-template-columns: 1fr 1fr 340px 230px;
+    grid-template-columns: 1fr 1fr 410px 220px;
   }
 }
 @media (max-width: 1200px) {
   .dashboard {
-    grid-template-columns: 1fr 1fr 300px 210px;
+    grid-template-columns: 1fr 1fr 350px 200px;
   }
 }
 @media (max-width: 1000px) {
@@ -713,11 +801,12 @@ html, body {
   .tyre-card        { grid-column: 1; grid-row: 4; }
   .fuel-card        { grid-column: 2; grid-row: 4; }
   .lap-recorder-card{ grid-column: 1 / span 2; grid-row: 5; }
-  .canvas-wrap      { min-height: 280px; }
+  .canvas-wrap      { min-height: 340px; }
 }
 @media (max-width: 640px) {
   .dashboard { grid-template-columns: 1fr; }
   .timing-card, .circuit-card, .leaderboard-card,
   .tyre-card, .fuel-card, .lap-recorder-card { grid-column: 1; grid-row: unset; }
   .topbar-info .info-chip:nth-child(n+3) { display: none; }
+  .pit-strategy-meta { grid-template-columns: 1fr; }
 }

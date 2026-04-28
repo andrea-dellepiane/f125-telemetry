@@ -152,6 +152,14 @@ io.on('connection', (socket) => {
 // ── Shared emit helper used by both the UDP path and the simulator ─────────────
 function onPacket(type, data) {
   io.emit(type, data);
+
+  if (type === 'lapData' && data && Array.isArray(data.cars)) {
+    io.emit('allLapData', { playerCarIndex: data.playerCarIndex, cars: data.cars });
+  }
+
+  if (type === 'carStatus' && data && Array.isArray(data.cars)) {
+    io.emit('allCarStatus', { playerCarIndex: data.playerCarIndex, cars: data.cars });
+  }
 }
 
 // ── Start data source ─────────────────────────────────────────────────────────
