@@ -161,6 +161,30 @@ html, body {
   border-bottom: 1px solid var(--border);
 }
 .timing-row label { color: var(--text-dim); font-size: 11px; }
+.timing-row-with-action { gap: 10px; }
+.timing-row-label-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.compare-lap-btn {
+  border: 1px solid rgba(255, 109, 0, 0.42);
+  background: rgba(255, 109, 0, 0.14);
+  color: #ffb16b;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+.compare-lap-btn:hover {
+  background: rgba(255, 109, 0, 0.22);
+  border-color: rgba(255, 109, 0, 0.62);
+  color: #ffd2ad;
+}
 .time-value {
   font-size: 13px;
   font-weight: 700;
@@ -169,6 +193,10 @@ html, body {
 }
 .time-value.highlight { color: #fff; }
 .time-value.purple    { color: var(--purple); }
+.time-value.orange    { color: var(--orange); }
+.time-value.delta-faster  { color: #38d9a9; }
+.time-value.delta-slower  { color: #ffd43b; }
+.time-value.delta-neutral { color: var(--text-dim); }
 .timing-row.small .time-value { font-size: 11px; }
 
 .sector-row   { display: flex; gap: 5px; margin: 9px 0; }
@@ -212,6 +240,27 @@ html, body {
 .sector-delta.delta-faster  { color: #38d9a9; }
 .sector-delta.delta-slower  { color: #ffd43b; }
 .sector-delta.delta-neutral { color: var(--text-dim); }
+.sector-reference-wrap {
+  margin-top: -2px;
+  margin-bottom: 8px;
+}
+.sector-reference-heading {
+  font-size: 9px;
+  color: var(--orange);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.sector-row-reference {
+  margin: 0;
+}
+.sector-box-reference {
+  background: rgba(255, 109, 0, 0.08);
+  border-color: rgba(255, 109, 0, 0.18);
+}
+.sector-time-reference {
+  color: #ffb16b;
+}
 
 /* ── Car Stats Row (in timing card) ─────────────────────────────────────── */
 .car-stats-row {
@@ -807,6 +856,145 @@ html, body {
 .ai-hints-list li:first-child { border-left-color: var(--accent-blue); }
 .ai-hints-list li:nth-child(2){ border-left-color: var(--green); }
 
+/* ── Comparison modal ───────────────────────────────────────────────────── */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(7, 7, 15, 0.76);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  z-index: 400;
+}
+.modal-backdrop.is-hidden {
+  display: none;
+}
+.comparison-modal {
+  width: min(100%, 460px);
+  background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0)), var(--surface);
+  border: 1px solid var(--border-2);
+  border-radius: 14px;
+  box-shadow: 0 26px 50px rgba(0, 0, 0, 0.36);
+  overflow: hidden;
+}
+.comparison-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.comparison-modal-head h3 {
+  font-size: 18px;
+  margin-bottom: 4px;
+}
+.comparison-modal-head p {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.comparison-modal-close {
+  border: 1px solid var(--border-2);
+  background: var(--surface-2);
+  color: var(--text-dim);
+  border-radius: 8px;
+  width: 34px;
+  height: 34px;
+  cursor: pointer;
+}
+.comparison-modal-body {
+  padding: 16px 18px;
+}
+.comparison-input-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.comparison-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.comparison-field input {
+  width: 100%;
+  border: 1px solid var(--border-2);
+  background: var(--surface-2);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.comparison-field input:focus {
+  outline: none;
+  border-color: rgba(255, 109, 0, 0.62);
+  box-shadow: 0 0 0 3px rgba(255, 109, 0, 0.15);
+}
+.comparison-total-card {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(255, 109, 0, 0.08);
+  border: 1px solid rgba(255, 109, 0, 0.18);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+.comparison-total-card span {
+  font-size: 10px;
+  color: #ffb16b;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.comparison-total-card strong {
+  color: #ffd2ad;
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+.comparison-help {
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.comparison-error {
+  min-height: 18px;
+  margin-top: 8px;
+  color: #ffb16b;
+  font-size: 11px;
+}
+.comparison-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 18px 18px;
+}
+.comparison-secondary-btn,
+.comparison-primary-btn {
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.comparison-secondary-btn {
+  border: 1px solid var(--border-2);
+  background: var(--surface-2);
+  color: var(--text);
+}
+.comparison-primary-btn {
+  border: 1px solid rgba(255, 109, 0, 0.42);
+  background: rgba(255, 109, 0, 0.18);
+  color: #ffd2ad;
+}
+
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 @media (max-width: 1400px) {
   .dashboard {
@@ -837,4 +1025,13 @@ html, body {
   .tyre-card, .fuel-card, .lap-recorder-card { grid-column: 1; grid-row: unset; }
   .topbar-info .info-chip:nth-child(n+3) { display: none; }
   .pit-strategy-meta { grid-template-columns: 1fr; }
+  .timing-row-with-action,
+  .timing-row-label-group,
+  .comparison-modal-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .comparison-input-grid {
+    grid-template-columns: 1fr;
+  }
 }

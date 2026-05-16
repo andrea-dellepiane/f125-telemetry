@@ -62,9 +62,16 @@
       <label>Ultimo Giro</label>
       <span class="time-value" id="last-lap-time">–:––.–––</span>
     </div>
-    <div class="timing-row">
-      <label>Miglior Giro</label>
+    <div class="timing-row timing-row-with-action">
+      <div class="timing-row-label-group">
+        <button class="compare-lap-btn" id="comparison-lap-btn" type="button">Aggiungi giro di confronto</button>
+        <label>Miglior Giro</label>
+      </div>
       <span class="time-value purple" id="best-lap-time">–:––.–––</span>
+    </div>
+    <div class="timing-row">
+      <label>Giro di Confronto</label>
+      <span class="time-value orange" id="comparison-lap-time">–:––.–––</span>
     </div>
 
     <div class="sector-row">
@@ -83,6 +90,36 @@
         <span class="sector-time" id="s3-time">–</span>
         <span class="sector-delta" id="s3-delta">vs giro prec. –</span>
       </div>
+    </div>
+    <div class="sector-reference-wrap" id="comparison-sector-wrap" style="display:none">
+      <div class="sector-reference-heading">Settori giro di confronto</div>
+      <div class="sector-row sector-row-reference">
+        <div class="sector-box sector-box-reference">
+          <span class="sector-label">S1</span>
+          <span class="sector-time sector-time-reference" id="comparison-s1-time">–</span>
+        </div>
+        <div class="sector-box sector-box-reference">
+          <span class="sector-label">S2</span>
+          <span class="sector-time sector-time-reference" id="comparison-s2-time">–</span>
+        </div>
+        <div class="sector-box sector-box-reference">
+          <span class="sector-label">S3</span>
+          <span class="sector-time sector-time-reference" id="comparison-s3-time">–</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="timing-row small">
+      <label>Gap Ultimo vs Prec.</label>
+      <span class="time-value" id="last-lap-vs-previous">–</span>
+    </div>
+    <div class="timing-row small">
+      <label>Gap Ultimo vs Miglior</label>
+      <span class="time-value" id="last-lap-vs-best">–</span>
+    </div>
+    <div class="timing-row small">
+      <label>Gap Ultimo vs Giro Confr.</label>
+      <span class="time-value" id="last-lap-vs-comparison">–</span>
     </div>
 
     <div class="timing-row small">
@@ -320,6 +357,45 @@
   </section>
 
 </main>
+
+<div class="modal-backdrop is-hidden" id="comparison-modal-backdrop" aria-hidden="true">
+  <div class="comparison-modal" role="dialog" aria-modal="true" aria-labelledby="comparison-modal-title">
+    <div class="comparison-modal-head">
+      <div>
+        <h3 id="comparison-modal-title">Giro di confronto</h3>
+        <p>Inserisci i tre settori e il giro viene calcolato in automatico.</p>
+      </div>
+      <button class="comparison-modal-close" id="comparison-modal-close" type="button" aria-label="Chiudi">✕</button>
+    </div>
+    <div class="comparison-modal-body">
+      <div class="comparison-input-grid">
+        <label class="comparison-field">
+          <span>S1</span>
+          <input id="comparison-sector-1" type="text" inputmode="decimal" placeholder="28.345" autocomplete="off">
+        </label>
+        <label class="comparison-field">
+          <span>S2</span>
+          <input id="comparison-sector-2" type="text" inputmode="decimal" placeholder="34.210" autocomplete="off">
+        </label>
+        <label class="comparison-field">
+          <span>S3</span>
+          <input id="comparison-sector-3" type="text" inputmode="decimal" placeholder="22.980" autocomplete="off">
+        </label>
+      </div>
+      <div class="comparison-total-card">
+        <span>Giro di confronto</span>
+        <strong id="comparison-total-preview">–:––.–––</strong>
+      </div>
+      <p class="comparison-help">Formati accettati: 28.345 oppure 1:02.345.</p>
+      <p class="comparison-error" id="comparison-modal-error"></p>
+    </div>
+    <div class="comparison-modal-actions">
+      <button class="comparison-secondary-btn" id="comparison-clear-btn" type="button">Rimuovi</button>
+      <button class="comparison-secondary-btn" id="comparison-cancel-btn" type="button">Annulla</button>
+      <button class="comparison-primary-btn" id="comparison-save-btn" type="button">Salva giro</button>
+    </div>
+  </div>
+</div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script src="/js/circuits-data.js"></script>

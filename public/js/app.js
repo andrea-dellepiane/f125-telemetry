@@ -66,6 +66,9 @@
     default: { ideal: 18, max: 24 },
   };
   const SECTOR_COUNT = 3;
+  const COMPARISON_LAP_STORAGE_KEY = 'f125-comparison-lap';
+  const DEFAULT_SECTOR_DELTA_LABEL = 'vs giro prec.';
+  const COMPARISON_SECTOR_DELTA_LABEL = 'vs giro di confr.';
 
   // ── State ──────────────────────────────────────────────────────────────────
   let bestLapMs = Infinity;
@@ -80,20 +83,17 @@
   let latestParticipants = [];
   let bestLapByCarIndex = {};
   let playerCarIndex = 0;
-  let sectorDisplayState = Array.from({ length: SECTOR_COUNT }, () => ({
-    timeMs: 0,
-    deltaMs: null,
-    colour: 'neutral',
-  }));
+  let sectorDisplayState = createEmptySectorDisplayState();
   let playerBestSectorMs = Array(SECTOR_COUNT).fill(Infinity);
   let sessionBestSectorMs = Array(SECTOR_COUNT).fill(Infinity);
-  let playerCurrentLapSectorMs = Array(SECTOR_COUNT).fill(0);
-  let lastCompletedPlayerLapSectorMs = null;
-  let playerSectorCommitLapNums = Array(SECTOR_COUNT).fill(0);
-  let lastProcessedPlayerCompletedLap = 0;
+  let currentPlayerLap = createEmptyLapProgress();
+  let pendingCompletedLapProgress = null;
+  let previousCompletedLapRecord = null;
+  let lastCompletedLapRecord = null;
   let observedCarSectorMs = {};
   let observedCarCompletedLap = {};
   let latestTrackTraceLength = 0;
+  let comparisonLap = loadComparisonLap();
 
   // ── DOM helpers ───────────────────────────────────────────────────────────
   function $(id)       { return document.getElementById(id); }
@@ -123,6 +123,15 @@
     return `${s}.${String(m).padStart(3,'0')}`;
   }
 
+  function msToEditableTime(ms) {
+    if (!ms || ms <= 0) return '';
+    const mins = Math.floor(ms / 60000);
+    const secs = Math.floor((ms % 60000) / 1000);
+    const msec = ms % 1000;
+    if (mins > 0) return `${mins}:${String(secs).padStart(2, '0')}.${String(msec).padStart(3, '0')}`;
+    return `${secs}.${String(msec).padStart(3, '0')}`;
+  }
+
   function sectorTotalMs(ms, mins) {
     if (!ms || ms <= 0) return 0;
     return ((mins || 0) * 60000) + ms;
@@ -134,20 +143,194 @@
     return sector3Ms > 0 ? sector3Ms : 0;
   }
 
-  function formatSectorDelta(deltaMs) {
-    if (!Number.isFinite(deltaMs)) return 'vs giro prec. –';
+  function formatSectorDelta(label, deltaMs) {
+    if (!Number.isFinite(deltaMs)) return `${label} –`;
     const sign = deltaMs > 0 ? '+' : deltaMs < 0 ? '-' : '';
-    return `vs giro prec. ${sign}${(Math.abs(deltaMs) / 1000).toFixed(3)}s`;
+    return `${label} ${sign}${(Math.abs(deltaMs) / 1000).toFixed(3)}s`;
   }
 
-  function getSectorDeltaClass(deltaMs) {
-    if (!Number.isFinite(deltaMs) || deltaMs === 0) return 'delta-neutral';
-    return deltaMs < 0 ? 'delta-faster' : 'delta-slower';
+  function formatLapDelta(deltaMs) {
+    if (!Number.isFinite(deltaMs)) return '–';
+    const sign = deltaMs > 0 ? '+' : deltaMs < 0 ? '-' : '';
+    return `${sign}${(Math.abs(deltaMs) / 1000).toFixed(3)}s`;
+  }
+
+  function parseUserTimeToMs(value) {
+    const raw = String(value || '').trim().replace(',', '.');
+    if (!raw) return 0;
+
+    if (raw.includes(':')) {
+      const parts = raw.split(':');
+      if (parts.length !== 2) return NaN;
+      const mins = Number(parts[0]);
+      const secs = Number(parts[1]);
+      if (!Number.isFinite(mins) || !Number.isFinite(secs) || mins < 0 || secs < 0) return NaN;
+      return Math.round((mins * 60 + secs) * 1000);
+    }
+
+    const secs = Number(raw);
+    if (!Number.isFinite(secs) || secs < 0) return NaN;
+    return Math.round(secs * 1000);
+  }
+
+  function createEmptySectorBoxState() {
+    return {
+      timeMs: 0,
+      deltaMs: null,
+      colour: 'neutral',
+      deltaLabel: DEFAULT_SECTOR_DELTA_LABEL,
+      neutralDelta: false,
+    };
+  }
+
+  function createEmptySectorDisplayState() {
+    return Array.from({ length: SECTOR_COUNT }, createEmptySectorBoxState);
+  }
+
+  function createEmptyLapProgress(lapNum = 0) {
+    return {
+      lapNum,
+      sectors: Array(SECTOR_COUNT).fill(0),
+    };
+  }
+
+  function normaliseComparisonLap(candidate) {
+    if (!candidate || !Array.isArray(candidate.sectors) || candidate.sectors.length !== SECTOR_COUNT) return null;
+    const sectors = candidate.sectors.map((value) => Math.round(Number(value) || 0));
+    if (sectors.some((value) => !Number.isFinite(value) || value <= 0)) return null;
+    return {
+      sectors,
+      totalMs: sectors.reduce((sum, value) => sum + value, 0),
+    };
+  }
+
+  function loadComparisonLap() {
+    try {
+      const raw = window.localStorage.getItem(COMPARISON_LAP_STORAGE_KEY);
+      if (!raw) return null;
+      return normaliseComparisonLap(JSON.parse(raw));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function persistComparisonLap() {
+    try {
+      if (!comparisonLap) {
+        window.localStorage.removeItem(COMPARISON_LAP_STORAGE_KEY);
+        return;
+      }
+      window.localStorage.setItem(COMPARISON_LAP_STORAGE_KEY, JSON.stringify(comparisonLap));
+    } catch (_) {}
+  }
+
+  function getReportedBestLapMs(lapPacket, allCars) {
+    const player = lapPacket && (lapPacket.player || lapPacket);
+    const fromPlayer = player && Number(player.bestLapTimeInMS);
+    if (fromPlayer > 0) return fromPlayer;
+
+    const cars = Array.isArray(allCars)
+      ? allCars
+      : (lapPacket && Array.isArray(lapPacket.cars) ? lapPacket.cars : []);
+    const playerCar = cars.find((car) => car && car.carIndex === playerCarIndex);
+    const fromCars = playerCar && Number(playerCar.bestLapTimeInMS);
+    return fromCars > 0 ? fromCars : 0;
   }
 
   function updateSectorBest(bestArray, index, timeMs) {
     if (!timeMs || timeMs <= 0) return;
     bestArray[index] = Math.min(bestArray[index], timeMs);
+  }
+
+  function getSectorDeltaClass(deltaMs, neutralDelta) {
+    if (neutralDelta || !Number.isFinite(deltaMs) || deltaMs === 0) return 'delta-neutral';
+    return deltaMs < 0 ? 'delta-faster' : 'delta-slower';
+  }
+
+  function setLapDeltaValue(id, deltaMs) {
+    const el = $(id);
+    if (!el) return;
+    el.textContent = formatLapDelta(deltaMs);
+    el.className = `time-value ${Number.isFinite(deltaMs)
+      ? (deltaMs < 0 ? 'delta-faster' : deltaMs > 0 ? 'delta-slower' : 'delta-neutral')
+      : 'delta-neutral'}`;
+  }
+
+  function updateBestLapDisplay() {
+    text('best-lap-time', msToLapTime(bestLapMs < Infinity ? bestLapMs : 0));
+  }
+
+  function updateLapComparisonRows() {
+    const previousDelta = (
+      lastCompletedLapRecord &&
+      previousCompletedLapRecord &&
+      previousCompletedLapRecord.totalMs > 0
+    ) ? lastCompletedLapRecord.totalMs - previousCompletedLapRecord.totalMs : null;
+
+    const bestDelta = lastCompletedLapRecord
+      ? lastCompletedLapRecord.deltaToBestAtCompletionMs
+      : null;
+
+    const comparisonDelta = (
+      lastCompletedLapRecord &&
+      comparisonLap &&
+      comparisonLap.totalMs > 0
+    ) ? lastCompletedLapRecord.totalMs - comparisonLap.totalMs : null;
+
+    setLapDeltaValue('last-lap-vs-previous', previousDelta);
+    setLapDeltaValue('last-lap-vs-best', bestDelta);
+    setLapDeltaValue('last-lap-vs-comparison', comparisonDelta);
+  }
+
+  function updateComparisonLapDisplays() {
+    text('comparison-lap-time', comparisonLap ? msToLapTime(comparisonLap.totalMs) : '–:––.–––');
+
+    const wrap = $('comparison-sector-wrap');
+    if (wrap) wrap.style.display = comparisonLap ? 'block' : 'none';
+
+    for (let index = 0; index < SECTOR_COUNT; index++) {
+      text(`comparison-s${index + 1}-time`, comparisonLap ? msSector(comparisonLap.sectors[index], 0) : '–');
+    }
+
+    updateLapComparisonRows();
+    refreshVisibleSectorComparisons();
+  }
+
+  function getActiveSectorReference(index) {
+    if (comparisonLap && comparisonLap.sectors[index] > 0) {
+      return {
+        label: COMPARISON_SECTOR_DELTA_LABEL,
+        timeMs: comparisonLap.sectors[index],
+        neutralDelta: true,
+      };
+    }
+
+    if (previousCompletedLapRecord && previousCompletedLapRecord.sectors[index] > 0) {
+      return {
+        label: DEFAULT_SECTOR_DELTA_LABEL,
+        timeMs: previousCompletedLapRecord.sectors[index],
+        neutralDelta: false,
+      };
+    }
+
+    return {
+      label: comparisonLap ? COMPARISON_SECTOR_DELTA_LABEL : DEFAULT_SECTOR_DELTA_LABEL,
+      timeMs: 0,
+      neutralDelta: !!comparisonLap,
+    };
+  }
+
+  function refreshVisibleSectorComparisons() {
+    sectorDisplayState = sectorDisplayState.map((state, index) => {
+      const reference = getActiveSectorReference(index);
+      return {
+        ...state,
+        deltaLabel: reference.label,
+        deltaMs: reference.timeMs > 0 && state.timeMs > 0 ? state.timeMs - reference.timeMs : null,
+        neutralDelta: reference.neutralDelta,
+      };
+    });
+    renderSectorBoxes(clamp(latestLapData.sector || 0, 0, 2));
   }
 
   function renderSectorBoxes(activeSector) {
@@ -157,8 +340,8 @@
       const deltaEl = $(`s${index + 1}-delta`);
       if (timeEl) timeEl.textContent = state.timeMs > 0 ? msSector(state.timeMs, 0) : '–';
       if (deltaEl) {
-        deltaEl.textContent = formatSectorDelta(state.deltaMs);
-        deltaEl.className = `sector-delta ${getSectorDeltaClass(state.deltaMs)}`;
+        deltaEl.textContent = formatSectorDelta(state.deltaLabel, state.deltaMs);
+        deltaEl.className = `sector-delta ${getSectorDeltaClass(state.deltaMs, state.neutralDelta)}`;
       }
       if (!box) return;
       box.classList.remove('active', 'sector-neutral', 'sector-yellow', 'sector-green', 'sector-purple');
@@ -168,19 +351,22 @@
   }
 
   function resetSectorTimingState() {
-    sectorDisplayState = Array.from({ length: SECTOR_COUNT }, () => ({
-      timeMs: 0,
-      deltaMs: null,
-      colour: 'neutral',
-    }));
+    bestLapMs = Infinity;
+    lastRecordedCompletedLap = 0;
+    recentLapTimes = [];
+    bestLapByCarIndex = {};
+    sectorDisplayState = createEmptySectorDisplayState();
     playerBestSectorMs = Array(SECTOR_COUNT).fill(Infinity);
     sessionBestSectorMs = Array(SECTOR_COUNT).fill(Infinity);
-    playerCurrentLapSectorMs = Array(SECTOR_COUNT).fill(0);
-    lastCompletedPlayerLapSectorMs = null;
-    playerSectorCommitLapNums = Array(SECTOR_COUNT).fill(0);
-    lastProcessedPlayerCompletedLap = 0;
+    currentPlayerLap = createEmptyLapProgress();
+    pendingCompletedLapProgress = null;
+    previousCompletedLapRecord = null;
+    lastCompletedLapRecord = null;
     observedCarSectorMs = {};
     observedCarCompletedLap = {};
+    updateBestLapDisplay();
+    updateLapComparisonRows();
+    updateComparisonLapDisplays();
     renderSectorBoxes(0);
   }
 
@@ -193,37 +379,55 @@
     return 'yellow';
   }
 
-  function applyPlayerSector(index, timeMs, lapNum) {
+  function applyPlayerSector(index, timeMs) {
     if (!timeMs || timeMs <= 0) return;
-    const previousLapTime = lastCompletedPlayerLapSectorMs && lastCompletedPlayerLapSectorMs[index] > 0
-      ? lastCompletedPlayerLapSectorMs[index]
-      : null;
+    const reference = getActiveSectorReference(index);
     sectorDisplayState[index] = {
       timeMs,
-      deltaMs: Number.isFinite(previousLapTime) ? timeMs - previousLapTime : null,
+      deltaMs: reference.timeMs > 0 ? timeMs - reference.timeMs : null,
       colour: classifySectorColour(index, timeMs),
+      deltaLabel: reference.label,
+      neutralDelta: reference.neutralDelta,
     };
     updateSectorBest(playerBestSectorMs, index, timeMs);
     updateSectorBest(sessionBestSectorMs, index, timeMs);
-    playerSectorCommitLapNums[index] = lapNum || 0;
   }
 
-  function finalizePlayerLap(completedLapNum, lapTimeMs) {
-    const sector1Ms = playerCurrentLapSectorMs[0];
-    const sector2Ms = playerCurrentLapSectorMs[1];
+  function buildCompletedLapRecord(progress, lapTimeMs) {
+    const sector1Ms = progress.sectors[0];
+    const sector2Ms = progress.sectors[1];
     const sector3Ms = deriveSector3Ms(lapTimeMs, sector1Ms, sector2Ms);
-    const completedSectors = [sector1Ms, sector2Ms, sector3Ms];
+    return {
+      lapNum: progress.lapNum,
+      totalMs: lapTimeMs,
+      sectors: [sector1Ms, sector2Ms, sector3Ms],
+      deltaToBestAtCompletionMs: Number.isFinite(bestLapMs) ? lapTimeMs - bestLapMs : null,
+    };
+  }
 
-    completedSectors.forEach((timeMs, index) => {
-      if (!timeMs || timeMs <= 0) return;
-      if (playerSectorCommitLapNums[index] !== completedLapNum || index === 2) {
-        applyPlayerSector(index, timeMs, completedLapNum);
-      }
+  function finalizePendingCompletedLap(currentLapNum, lastLapTimeMs) {
+    const completedLapNum = Math.max(0, currentLapNum - 1);
+    if (!pendingCompletedLapProgress || pendingCompletedLapProgress.lapNum !== completedLapNum || !lastLapTimeMs) return;
+    if (lastCompletedLapRecord && lastCompletedLapRecord.lapNum >= completedLapNum) {
+      pendingCompletedLapProgress = null;
+      return;
+    }
+
+    const completedLap = buildCompletedLapRecord(pendingCompletedLapProgress, lastLapTimeMs);
+    completedLap.sectors.forEach((timeMs, index) => {
+      if (timeMs > 0) applyPlayerSector(index, timeMs);
     });
 
-    lastCompletedPlayerLapSectorMs = completedSectors;
-    playerCurrentLapSectorMs = Array(SECTOR_COUNT).fill(0);
-    lastProcessedPlayerCompletedLap = completedLapNum;
+    previousCompletedLapRecord = lastCompletedLapRecord;
+    lastCompletedLapRecord = completedLap;
+
+    if (completedLap.totalMs > 0 && completedLap.totalMs < bestLapMs) {
+      bestLapMs = completedLap.totalMs;
+    }
+
+    pendingCompletedLapProgress = null;
+    updateBestLapDisplay();
+    updateLapComparisonRows();
   }
 
   function observeOtherCarsSectorBenchmarks(cars) {
@@ -657,32 +861,44 @@
     text('current-lap-time', msToLapTime(lap.currentLapTimeInMS));
     text('last-lap-time',    msToLapTime(lap.lastLapTimeInMS));
 
-    if (lap.lastLapTimeInMS > 0 && lap.lastLapTimeInMS < bestLapMs) {
-      bestLapMs = lap.lastLapTimeInMS;
-    }
-    text('best-lap-time', msToLapTime(bestLapMs < Infinity ? bestLapMs : 0));
-
     const sector = clamp(lap.sector || 0, 0, 2);
     const currentLapNum = lap.currentLapNum || 1;
-    const completedLapNum = Math.max(0, currentLapNum - 1);
-    const previousSector1Ms = playerCurrentLapSectorMs[0];
-    const previousSector2Ms = playerCurrentLapSectorMs[1];
-    const sector1Ms = sectorTotalMs(lap.sector1TimeInMS, lap.sector1TimeMinutes);
-    const sector2Ms = sectorTotalMs(lap.sector2TimeInMS, lap.sector2TimeMinutes);
+    const currentLapTimeMs = lap.currentLapTimeInMS || 0;
+    const rawSector1Ms = sectorTotalMs(lap.sector1TimeInMS, lap.sector1TimeMinutes);
+    const rawSector2Ms = sectorTotalMs(lap.sector2TimeInMS, lap.sector2TimeMinutes);
+    const sector1Ms = rawSector1Ms > 0 && rawSector1Ms <= currentLapTimeMs ? rawSector1Ms : 0;
+    const sector2Ms = rawSector2Ms > 0 && rawSector2Ms <= currentLapTimeMs ? rawSector2Ms : 0;
 
-    if (lap.lastLapTimeInMS > 0 && completedLapNum > lastProcessedPlayerCompletedLap) {
-      finalizePlayerLap(completedLapNum, lap.lastLapTimeInMS);
+    if (!currentPlayerLap.lapNum || currentLapNum < currentPlayerLap.lapNum) {
+      currentPlayerLap = createEmptyLapProgress(currentLapNum);
+      pendingCompletedLapProgress = null;
     }
 
-    if (sector1Ms > 0) {
-      playerCurrentLapSectorMs[0] = sector1Ms;
-      if (sector1Ms !== previousSector1Ms) applyPlayerSector(0, sector1Ms, currentLapNum);
+    if (currentPlayerLap.lapNum && currentLapNum > currentPlayerLap.lapNum) {
+      pendingCompletedLapProgress = {
+        lapNum: currentPlayerLap.lapNum,
+        sectors: currentPlayerLap.sectors.slice(),
+      };
+      currentPlayerLap = createEmptyLapProgress(currentLapNum);
     }
 
-    if (sector2Ms > 0) {
-      playerCurrentLapSectorMs[1] = sector2Ms;
-      if (sector2Ms !== previousSector2Ms) applyPlayerSector(1, sector2Ms, currentLapNum);
+    finalizePendingCompletedLap(currentLapNum, lap.lastLapTimeInMS || 0);
+
+    if (sector1Ms > currentPlayerLap.sectors[0]) {
+      currentPlayerLap.sectors[0] = sector1Ms;
+      applyPlayerSector(0, sector1Ms);
     }
+
+    if (sector2Ms > currentPlayerLap.sectors[1]) {
+      currentPlayerLap.sectors[1] = sector2Ms;
+      applyPlayerSector(1, sector2Ms);
+    }
+
+    const reportedBestLapMs = getReportedBestLapMs(d, latestAllLapData);
+    if (reportedBestLapMs > 0 && reportedBestLapMs < bestLapMs) {
+      bestLapMs = reportedBestLapMs;
+    }
+    updateBestLapDisplay();
 
     renderSectorBoxes(sector);
 
@@ -872,6 +1088,131 @@
     updatePitStrategy();
   }
 
+  function setComparisonModalVisibility(isOpen) {
+    const backdrop = $('comparison-modal-backdrop');
+    if (!backdrop) return;
+    backdrop.classList.toggle('is-hidden', !isOpen);
+    backdrop.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+  }
+
+  function getComparisonLapInputs() {
+    return [
+      $('comparison-sector-1'),
+      $('comparison-sector-2'),
+      $('comparison-sector-3'),
+    ];
+  }
+
+  function setComparisonModalError(message) {
+    text('comparison-modal-error', message || '');
+  }
+
+  function updateComparisonClearButton() {
+    const clearBtn = $('comparison-clear-btn');
+    if (clearBtn) clearBtn.style.display = comparisonLap ? 'inline-flex' : 'none';
+  }
+
+  function populateComparisonLapModal() {
+    const inputs = getComparisonLapInputs();
+    inputs.forEach((input, index) => {
+      if (!input) return;
+      input.value = comparisonLap ? msToEditableTime(comparisonLap.sectors[index]) : '';
+    });
+    updateComparisonClearButton();
+    setComparisonModalError('');
+    renderComparisonLapPreview();
+  }
+
+  function readComparisonLapDraft() {
+    const sectors = getComparisonLapInputs().map((input) => parseUserTimeToMs(input && input.value));
+    if (sectors.some((value) => Number.isNaN(value))) {
+      return { error: 'Controlla il formato dei settori. Usa ad esempio 28.345 oppure 1:02.345.' };
+    }
+    if (sectors.some((value) => value <= 0)) {
+      return { error: 'Compila tutti e tre i settori prima di salvare il giro di confronto.' };
+    }
+    return {
+      sectors,
+      totalMs: sectors.reduce((sum, value) => sum + value, 0),
+    };
+  }
+
+  function renderComparisonLapPreview() {
+    const preview = $('comparison-total-preview');
+    if (!preview) return;
+    const draft = readComparisonLapDraft();
+    preview.textContent = draft.error ? '–:––.–––' : msToLapTime(draft.totalMs);
+  }
+
+  function openComparisonLapModal() {
+    populateComparisonLapModal();
+    setComparisonModalVisibility(true);
+    const firstInput = $('comparison-sector-1');
+    if (firstInput) firstInput.focus();
+  }
+
+  function closeComparisonLapModal() {
+    setComparisonModalVisibility(false);
+    setComparisonModalError('');
+  }
+
+  function saveComparisonLapFromModal() {
+    const draft = readComparisonLapDraft();
+    if (draft.error) {
+      setComparisonModalError(draft.error);
+      renderComparisonLapPreview();
+      return;
+    }
+
+    comparisonLap = normaliseComparisonLap(draft);
+    persistComparisonLap();
+    updateComparisonLapDisplays();
+    closeComparisonLapModal();
+  }
+
+  function clearComparisonLap() {
+    comparisonLap = null;
+    persistComparisonLap();
+    updateComparisonLapDisplays();
+    closeComparisonLapModal();
+  }
+
+  function bindComparisonLapControls() {
+    const openBtn = $('comparison-lap-btn');
+    if (openBtn) openBtn.addEventListener('click', openComparisonLapModal);
+
+    getComparisonLapInputs().forEach((input) => {
+      if (!input) return;
+      input.addEventListener('input', () => {
+        setComparisonModalError('');
+        renderComparisonLapPreview();
+      });
+    });
+
+    const saveBtn = $('comparison-save-btn');
+    if (saveBtn) saveBtn.addEventListener('click', saveComparisonLapFromModal);
+
+    const clearBtn = $('comparison-clear-btn');
+    if (clearBtn) clearBtn.addEventListener('click', clearComparisonLap);
+
+    const cancelBtn = $('comparison-cancel-btn');
+    if (cancelBtn) cancelBtn.addEventListener('click', closeComparisonLapModal);
+
+    const closeBtn = $('comparison-modal-close');
+    if (closeBtn) closeBtn.addEventListener('click', closeComparisonLapModal);
+
+    const backdrop = $('comparison-modal-backdrop');
+    if (backdrop) {
+      backdrop.addEventListener('click', (event) => {
+        if (event.target === backdrop) closeComparisonLapModal();
+      });
+    }
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') closeComparisonLapModal();
+    });
+  }
+
   // ── Init from state snapshot ───────────────────────────────────────────────
   function handleInit(state) {
     syncPlayerCarIndex(state);
@@ -933,6 +1274,9 @@
   CircuitMap.init(document.getElementById('circuit-canvas'));
   if (CircuitMap.setPlayerCarIndex) CircuitMap.setPlayerCarIndex(playerCarIndex);
   if (window.LapRecorder) LapRecorder.init();
+  bindComparisonLapControls();
+  updateBestLapDisplay();
+  updateComparisonLapDisplays();
 
   fetch('/api/state')
     .then(r => r.json())
