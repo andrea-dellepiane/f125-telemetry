@@ -67,8 +67,12 @@
   };
   const SECTOR_COUNT = 3;
   const COMPARISON_LAP_STORAGE_KEY = 'f125-comparison-lap';
+  const SAVED_LAPS_KEY = 'f125-saved-laps';
   const DEFAULT_SECTOR_DELTA_LABEL = 'vs giro prec.';
   const COMPARISON_SECTOR_DELTA_LABEL = 'vs giro di confr.';
+  const MAX_SAVED_LAPS = 30;
+  // Minimum gap change (ms) to show a trend arrow in the gap display
+  const GAP_TREND_THRESHOLD_MS = 50;
 
   // ── State ──────────────────────────────────────────────────────────────────
   let bestLapMs = Infinity;
@@ -94,6 +98,9 @@
   let observedCarCompletedLap = {};
   let latestTrackTraceLength = 0;
   let comparisonLap = loadComparisonLap();
+  let savedLaps = loadSavedLaps();
+  let prevGapLeaderMs = 0;
+  let prevGapAheadMs = 0;
 
   // ── DOM helpers ───────────────────────────────────────────────────────────
   function $(id)       { return document.getElementById(id); }
@@ -224,6 +231,100 @@
     } catch (_) {}
   }
 
+  // ── Saved Laps (localStorage) ──────────────────────────────────────────────
+  function loadSavedLaps() {
+    try {
+      const raw = window.localStorage.getItem(SAVED_LAPS_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function persistSavedLaps() {
+    try {
+      window.localStorage.setItem(SAVED_LAPS_KEY, JSON.stringify(savedLaps));
+    } catch (_) {}
+  }
+
+  function saveCompletedLapToHistory(lapRecord) {
+    if (!lapRecord || !lapRecord.totalMs || lapRecord.totalMs <= 0) return;
+    savedLaps.push({
+      lapNum:    lapRecord.lapNum,
+      totalMs:   lapRecord.totalMs,
+      sectors:   lapRecord.sectors.slice(),
+      savedAt:   Date.now(),
+    });
+    if (savedLaps.length > MAX_SAVED_LAPS) savedLaps.shift();
+    persistSavedLaps();
+    renderLapHistory();
+  }
+
+  function clearSavedLaps() {
+    savedLaps = [];
+    persistSavedLaps();
+    renderLapHistory();
+  }
+
+  function useSavedLapAsComparison(index) {
+    const lap = savedLaps[index];
+    if (!lap) return;
+    comparisonLap = normaliseComparisonLap(lap);
+    if (comparisonLap) {
+      persistComparisonLap();
+      updateComparisonLapDisplays();
+    }
+  }
+
+  function renderLapHistory() {
+    const tbody = $('lap-history-tbody');
+    const countEl = $('lap-history-count');
+    if (countEl) countEl.textContent = savedLaps.length;
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    if (!savedLaps.length) {
+      const tr = document.createElement('tr');
+      tr.className = 'lh-empty-row';
+      tr.innerHTML = '<td colspan="6">Nessun giro completato</td>';
+      tbody.appendChild(tr);
+      return;
+    }
+
+    // Show most recent first
+    const reversed = savedLaps.slice().reverse();
+    let localBestMs = Infinity;
+    savedLaps.forEach((l) => { if (l.totalMs > 0 && l.totalMs < localBestMs) localBestMs = l.totalMs; });
+
+    reversed.forEach((lap, idx) => {
+      const originalIndex = savedLaps.length - 1 - idx;
+      const isBest = lap.totalMs === localBestMs;
+      const tr = document.createElement('tr');
+      tr.className = 'lh-row' + (isBest ? ' lh-pb' : '');
+
+      const formatSectorCell = (index) =>
+        lap.sectors && lap.sectors[index] > 0 ? msSector(lap.sectors[index], 0) : '–';
+
+      tr.innerHTML =
+        `<td class="lh-num">L${lap.lapNum}</td>` +
+        `<td class="lh-time">${isBest ? '<span class="lh-pb-badge">PB</span>' : ''}${msToLapTime(lap.totalMs)}</td>` +
+        `<td class="lh-sector">${formatSectorCell(0)}</td>` +
+        `<td class="lh-sector">${formatSectorCell(1)}</td>` +
+        `<td class="lh-sector">${formatSectorCell(2)}</td>` +
+        `<td><button class="lh-use-btn" data-idx="${originalIndex}">↗ Usa</button></td>`;
+
+      tbody.appendChild(tr);
+    });
+
+    // Wire up "use" buttons
+    tbody.querySelectorAll('.lh-use-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const idx = Number(btn.dataset.idx);
+        useSavedLapAsComparison(idx);
+      });
+    });
+  }
+
   function getReportedBestLapMs(lapPacket, allCars) {
     const player = lapPacket && (lapPacket.player || lapPacket);
     const fromPlayer = player && Number(player.bestLapTimeInMS);
@@ -258,6 +359,13 @@
 
   function updateBestLapDisplay() {
     text('best-lap-time', msToLapTime(bestLapMs < Infinity ? bestLapMs : 0));
+  }
+
+  function updateSessionBestSectorsDisplay() {
+    for (let i = 0; i < SECTOR_COUNT; i++) {
+      const ms = sessionBestSectorMs[i];
+      text(`sb-s${i + 1}`, Number.isFinite(ms) ? msSector(ms, 0) : '–');
+    }
   }
 
   function updateLapComparisonRows() {
@@ -364,6 +472,8 @@
     lastCompletedLapRecord = null;
     observedCarSectorMs = {};
     observedCarCompletedLap = {};
+    prevGapLeaderMs = 0;
+    prevGapAheadMs = 0;
     updateBestLapDisplay();
     updateLapComparisonRows();
     updateComparisonLapDisplays();
@@ -391,6 +501,7 @@
     };
     updateSectorBest(playerBestSectorMs, index, timeMs);
     updateSectorBest(sessionBestSectorMs, index, timeMs);
+    updateSessionBestSectorsDisplay();
   }
 
   function buildCompletedLapRecord(progress, lapTimeMs) {
@@ -428,6 +539,7 @@
     pendingCompletedLapProgress = null;
     updateBestLapDisplay();
     updateLapComparisonRows();
+    saveCompletedLapToHistory(completedLap);
   }
 
   function observeOtherCarsSectorBenchmarks(cars) {
@@ -459,6 +571,7 @@
 
       observedCarSectorMs[car.carIndex] = liveSectors;
     });
+    updateSessionBestSectorsDisplay();
   }
 
   // ── Tyre temp → colour ─────────────────────────────────────────────────────
@@ -564,11 +677,23 @@
           gapToLeaderMs: car.gapToLeaderMs || car.deltaToRaceLeaderInMS || 0,
           bestLapTimeInMS,
           pitStatus: car.pitStatus || 0,
+          currentLapNum: car.currentLapNum || 0,
           isPlayer: car.carIndex === playerCarIndex,
           hasFastestLap: false,
+          intervalMs: 0,
         };
       })
       .sort((a, b) => (a.position || 999) - (b.position || 999));
+
+    // Compute intervals (gap to car directly ahead)
+    rows.forEach((row, idx) => {
+      if (idx === 0) {
+        row.intervalMs = 0;
+      } else {
+        const ahead = rows[idx - 1];
+        row.intervalMs = Math.max(0, (row.gapToLeaderMs || 0) - (ahead.gapToLeaderMs || 0));
+      }
+    });
 
     let fastestIdx = -1;
     let fastestLap = Infinity;
@@ -908,12 +1033,48 @@
       lapCounter.textContent = `Lap ${lap.currentLapNum}${total ? ' / ' + total : ''}`;
     }
 
-    if (lap.deltaToRaceLeaderInMS > 0) {
-      text('gap-leader', '+' + (lap.deltaToRaceLeaderInMS / 1000).toFixed(3) + 's');
-    } else { text('gap-leader', '–'); }
-    if (lap.deltaToCarInFrontInMS > 0) {
-      text('gap-ahead', '+' + (lap.deltaToCarInFrontInMS / 1000).toFixed(3) + 's');
-    } else { text('gap-ahead', '–'); }
+    // Gap to leader with trend
+    const gapLeaderMs = lap.deltaToRaceLeaderInMS || 0;
+    const gapAheadMs  = lap.deltaToCarInFrontInMS  || 0;
+
+    if (gapLeaderMs > 0) {
+      const leaderTrend = prevGapLeaderMs > 0 ? gapLeaderMs - prevGapLeaderMs : 0;
+      const leaderTrendCls = leaderTrend > GAP_TREND_THRESHOLD_MS ? 'gap-trend-worse' : leaderTrend < -GAP_TREND_THRESHOLD_MS ? 'gap-trend-better' : '';
+      const leaderTrendSym = leaderTrend > GAP_TREND_THRESHOLD_MS ? '▲' : leaderTrend < -GAP_TREND_THRESHOLD_MS ? '▼' : '';
+      const leaderEl = $('gap-leader');
+      if (leaderEl) {
+        leaderEl.textContent = '+' + (gapLeaderMs / 1000).toFixed(3) + 's';
+        leaderEl.className = `time-value ${leaderTrendCls}`;
+      }
+      const trendEl = $('gap-leader-trend');
+      if (trendEl) { trendEl.textContent = leaderTrendSym; trendEl.className = `gap-trend-icon ${leaderTrendCls}`; }
+    } else {
+      text('gap-leader', '–');
+      const trendEl = $('gap-leader-trend');
+      if (trendEl) { trendEl.textContent = ''; trendEl.className = 'gap-trend-icon'; }
+    }
+    if (gapLeaderMs > 0) prevGapLeaderMs = gapLeaderMs;
+
+    if (gapAheadMs > 0) {
+      const aheadTrend = prevGapAheadMs > 0 ? gapAheadMs - prevGapAheadMs : 0;
+      const aheadTrendCls = aheadTrend > GAP_TREND_THRESHOLD_MS ? 'gap-trend-worse' : aheadTrend < -GAP_TREND_THRESHOLD_MS ? 'gap-trend-better' : '';
+      const aheadTrendSym = aheadTrend > GAP_TREND_THRESHOLD_MS ? '▲' : aheadTrend < -GAP_TREND_THRESHOLD_MS ? '▼' : '';
+      const aheadEl = $('gap-ahead');
+      if (aheadEl) {
+        aheadEl.textContent = '+' + (gapAheadMs / 1000).toFixed(3) + 's';
+        aheadEl.className = `time-value ${aheadTrendCls}`;
+      }
+      const trendEl = $('gap-ahead-trend');
+      if (trendEl) { trendEl.textContent = aheadTrendSym; trendEl.className = `gap-trend-icon ${aheadTrendCls}`; }
+    } else {
+      text('gap-ahead', '–');
+      const trendEl = $('gap-ahead-trend');
+      if (trendEl) { trendEl.textContent = ''; trendEl.className = 'gap-trend-icon'; }
+    }
+    if (gapAheadMs > 0) prevGapAheadMs = gapAheadMs;
+
+    // Gap behind (computed from leaderboard data)
+    updateGapBehind(lap);
 
     text('lap-distance', lap.lapDistance > 0 ? Math.round(lap.lapDistance) + ' m' : '–');
     text('num-pit-stops', lap.numPitStops || 0);
@@ -927,6 +1088,30 @@
       LapRecorder.onLapChange(lap.currentLapNum);
       LapRecorder.captureSample();
     }
+  }
+
+  function updateGapBehind(playerLap) {
+    const el = $('gap-behind');
+    if (!el) return;
+    if (!Array.isArray(latestAllLapData) || !latestAllLapData.length) { el.textContent = '–'; return; }
+
+    const playerPos = playerLap.carPosition || 0;
+    if (!playerPos) { el.textContent = '–'; return; }
+
+    const carBehind = latestAllLapData.find((car) => {
+      if (car.carIndex === playerCarIndex) return false;
+      const resultStatus = car.resultStatus ?? 2;
+      if (resultStatus === 0 || resultStatus === 1) return false;
+      return (car.carPosition || 0) === playerPos + 1;
+    });
+
+    if (!carBehind) { el.textContent = '–'; return; }
+
+    const playerGap  = playerLap.deltaToRaceLeaderInMS || 0;
+    const behindGap  = carBehind.deltaToRaceLeaderInMS || 0;
+    const interval   = behindGap - playerGap;
+    if (interval <= 0) { el.textContent = '–'; return; }
+    el.textContent = '+' + (interval / 1000).toFixed(3) + 's';
   }
 
   function handleTelemetry(d) {
@@ -1277,6 +1462,10 @@
   bindComparisonLapControls();
   updateBestLapDisplay();
   updateComparisonLapDisplays();
+  renderLapHistory();
+
+  const lapHistoryClearBtn = $('lap-history-clear');
+  if (lapHistoryClearBtn) lapHistoryClearBtn.addEventListener('click', clearSavedLaps);
 
   fetch('/api/state')
     .then(r => r.json())
