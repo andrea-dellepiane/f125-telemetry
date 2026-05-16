@@ -91,6 +91,12 @@
         <span class="sector-delta" id="s3-delta">vs giro prec. –</span>
       </div>
     </div>
+    <div class="sector-best-row">
+      <span class="sector-best-label">SB</span>
+      <span class="sector-best-time" id="sb-s1">–</span>
+      <span class="sector-best-time" id="sb-s2">–</span>
+      <span class="sector-best-time" id="sb-s3">–</span>
+    </div>
     <div class="sector-reference-wrap" id="comparison-sector-wrap" style="display:none">
       <div class="sector-reference-heading">Settori giro di confronto</div>
       <div class="sector-row sector-row-reference">
@@ -124,11 +130,21 @@
 
     <div class="timing-row small">
       <label>Gap al Leader</label>
-      <span class="time-value" id="gap-leader">–</span>
+      <span class="gap-cell-wrap">
+        <span class="gap-trend-icon" id="gap-leader-trend"></span>
+        <span class="time-value" id="gap-leader">–</span>
+      </span>
     </div>
     <div class="timing-row small">
       <label>Gap Davanti</label>
-      <span class="time-value" id="gap-ahead">–</span>
+      <span class="gap-cell-wrap">
+        <span class="gap-trend-icon" id="gap-ahead-trend"></span>
+        <span class="time-value" id="gap-ahead">–</span>
+      </span>
+    </div>
+    <div class="timing-row small">
+      <label>Gap Dietro</label>
+      <span class="time-value" id="gap-behind">–</span>
     </div>
     
     <div class="timing-row small">
@@ -200,7 +216,7 @@
       <span></span>
       <span>Driver</span>
       <span>Gom</span>
-      <span>Gap</span>
+      <span>Int/Gap</span>
     </div>
     <div class="lb-rows" id="leaderboard-rows"></div>
   </section>
@@ -353,6 +369,32 @@
         <button class="ai-panel-close" id="ai-panel-close">✕</button>
       </div>
       <ul class="ai-hints-list" id="ai-hints-list"></ul>
+    </div>
+
+    <!-- Lap History Panel -->
+    <div class="lap-history-panel">
+      <div class="lap-history-header">
+        <span class="lap-history-title">📋 Storico Giri</span>
+        <span class="lap-history-count-badge" id="lap-history-count">0</span>
+        <button class="lap-history-clear-btn" id="lap-history-clear">Cancella</button>
+      </div>
+      <div class="lap-history-scroll">
+        <table class="lap-history-table">
+          <thead>
+            <tr>
+              <th>Giro</th>
+              <th>Tempo</th>
+              <th>S1</th>
+              <th>S2</th>
+              <th>S3</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="lap-history-tbody">
+            <tr class="lh-empty-row"><td colspan="6">Nessun giro completato ancora</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </section>
 
