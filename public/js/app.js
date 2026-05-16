@@ -71,6 +71,8 @@
   const DEFAULT_SECTOR_DELTA_LABEL = 'vs giro prec.';
   const COMPARISON_SECTOR_DELTA_LABEL = 'vs giro di confr.';
   const MAX_SAVED_LAPS = 30;
+  // Minimum gap change (ms) to show a trend arrow in the gap display
+  const GAP_TREND_THRESHOLD_MS = 50;
 
   // ── State ──────────────────────────────────────────────────────────────────
   let bestLapMs = Infinity;
@@ -300,16 +302,15 @@
       const tr = document.createElement('tr');
       tr.className = 'lh-row' + (isBest ? ' lh-pb' : '');
 
-      const s1 = lap.sectors && lap.sectors[0] > 0 ? msSector(lap.sectors[0], 0) : '–';
-      const s2 = lap.sectors && lap.sectors[1] > 0 ? msSector(lap.sectors[1], 0) : '–';
-      const s3 = lap.sectors && lap.sectors[2] > 0 ? msSector(lap.sectors[2], 0) : '–';
+      const formatSectorCell = (index) =>
+        lap.sectors && lap.sectors[index] > 0 ? msSector(lap.sectors[index], 0) : '–';
 
       tr.innerHTML =
         `<td class="lh-num">L${lap.lapNum}</td>` +
         `<td class="lh-time">${isBest ? '<span class="lh-pb-badge">PB</span>' : ''}${msToLapTime(lap.totalMs)}</td>` +
-        `<td class="lh-sector">${s1}</td>` +
-        `<td class="lh-sector">${s2}</td>` +
-        `<td class="lh-sector">${s3}</td>` +
+        `<td class="lh-sector">${formatSectorCell(0)}</td>` +
+        `<td class="lh-sector">${formatSectorCell(1)}</td>` +
+        `<td class="lh-sector">${formatSectorCell(2)}</td>` +
         `<td><button class="lh-use-btn" data-idx="${originalIndex}">↗ Usa</button></td>`;
 
       tbody.appendChild(tr);
@@ -1038,8 +1039,8 @@
 
     if (gapLeaderMs > 0) {
       const leaderTrend = prevGapLeaderMs > 0 ? gapLeaderMs - prevGapLeaderMs : 0;
-      const leaderTrendCls = leaderTrend > 50 ? 'gap-trend-worse' : leaderTrend < -50 ? 'gap-trend-better' : '';
-      const leaderTrendSym = leaderTrend > 50 ? '▲' : leaderTrend < -50 ? '▼' : '';
+      const leaderTrendCls = leaderTrend > GAP_TREND_THRESHOLD_MS ? 'gap-trend-worse' : leaderTrend < -GAP_TREND_THRESHOLD_MS ? 'gap-trend-better' : '';
+      const leaderTrendSym = leaderTrend > GAP_TREND_THRESHOLD_MS ? '▲' : leaderTrend < -GAP_TREND_THRESHOLD_MS ? '▼' : '';
       const leaderEl = $('gap-leader');
       if (leaderEl) {
         leaderEl.textContent = '+' + (gapLeaderMs / 1000).toFixed(3) + 's';
@@ -1056,8 +1057,8 @@
 
     if (gapAheadMs > 0) {
       const aheadTrend = prevGapAheadMs > 0 ? gapAheadMs - prevGapAheadMs : 0;
-      const aheadTrendCls = aheadTrend > 50 ? 'gap-trend-worse' : aheadTrend < -50 ? 'gap-trend-better' : '';
-      const aheadTrendSym = aheadTrend > 50 ? '▲' : aheadTrend < -50 ? '▼' : '';
+      const aheadTrendCls = aheadTrend > GAP_TREND_THRESHOLD_MS ? 'gap-trend-worse' : aheadTrend < -GAP_TREND_THRESHOLD_MS ? 'gap-trend-better' : '';
+      const aheadTrendSym = aheadTrend > GAP_TREND_THRESHOLD_MS ? '▲' : aheadTrend < -GAP_TREND_THRESHOLD_MS ? '▼' : '';
       const aheadEl = $('gap-ahead');
       if (aheadEl) {
         aheadEl.textContent = '+' + (gapAheadMs / 1000).toFixed(3) + 's';

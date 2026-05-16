@@ -21,7 +21,7 @@
   }
 
   function msToInterval(ms) {
-    if (ms == null || ms <= 0) return '—';
+    if (ms === null || ms === undefined || ms <= 0) return '—';
     if (ms >= 60000) return `+${Math.floor(ms / 60000)}L`;
     return `+${(ms / 1000).toFixed(3)}s`;
   }
