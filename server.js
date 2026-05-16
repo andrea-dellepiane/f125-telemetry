@@ -11,6 +11,7 @@ const { getState         } = require('./src/state');
 const PORT     = process.env.PORT     ? parseInt(process.env.PORT)     : 3000;
 const UDP_PORT = process.env.UDP_PORT ? parseInt(process.env.UDP_PORT) : 20777;
 const DEMO     = process.argv.includes('--demo') || process.env.DEMO === '1';
+let lastTrackTraceLength = 0;
 
 // ── HTTP + Socket.io setup ────────────────────────────────────────────────────
 const app    = express();
@@ -151,6 +152,7 @@ io.on('connection', (socket) => {
 
 // ── Shared emit helper used by both the UDP path and the simulator ─────────────
 function onPacket(type, data) {
+  if (type === 'trackTrace') return;
   io.emit(type, data);
 
   if (type === 'lapData' && data && Array.isArray(data.cars)) {
@@ -159,6 +161,31 @@ function onPacket(type, data) {
 
   if (type === 'carStatus' && data && Array.isArray(data.cars)) {
     io.emit('allCarStatus', { playerCarIndex: data.playerCarIndex, cars: data.cars });
+  }
+}
+
+function emitTrackTraceUpdate() {
+  const { trackTrace } = getState();
+  if (!Array.isArray(trackTrace)) return;
+
+  if (trackTrace.length < lastTrackTraceLength) {
+    io.emit('trackTrace', {
+      mode: 'replace',
+      points: trackTrace,
+      totalLength: trackTrace.length,
+    });
+    lastTrackTraceLength = trackTrace.length;
+    return;
+  }
+
+  if (trackTrace.length > lastTrackTraceLength) {
+    io.emit('trackTrace', {
+      mode: 'append',
+      start: lastTrackTraceLength,
+      points: trackTrace.slice(lastTrackTraceLength),
+      totalLength: trackTrace.length,
+    });
+    lastTrackTraceLength = trackTrace.length;
   }
 }
 
@@ -173,8 +200,7 @@ if (DEMO) {
 
 // ── Periodically push the track trace (for circuit visualisation) ─────────────
 setInterval(() => {
-  const { trackTrace } = getState();
-  if (trackTrace.length) io.emit('trackTrace', trackTrace);
+  emitTrackTraceUpdate();
 }, 1000);
 
 // ── Start HTTP server ─────────────────────────────────────────────────────────

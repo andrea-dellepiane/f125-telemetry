@@ -4,6 +4,8 @@
  * All consumers (HTTP API, Socket.io broadcasts) read from here.
  */
 
+const TRACK_TRACE_SAMPLE_DISTANCE_SQ = 2.2 * 2.2;
+
 let state = {
   playerCarIndex: 0,
 
@@ -183,13 +185,12 @@ function updateState(result) {
       state.motion.playerYaw = pos.yaw || 0;
       state.motion.allCars = result.data.allCars || [];
 
-      // Accumulate track trace (sample every ~1 m to avoid flooding)
+      // Accumulate track trace for the full session without trimming it away.
       const last = state.trackTrace[state.trackTrace.length - 1];
       const dx = last ? pos.worldPositionX - last.x : Infinity;
       const dz = last ? pos.worldPositionZ - last.z : Infinity;
-      if (dx * dx + dz * dz > 1) {
+      if (dx * dx + dz * dz >= TRACK_TRACE_SAMPLE_DISTANCE_SQ) {
         state.trackTrace.push({ x: pos.worldPositionX, z: pos.worldPositionZ });
-        if (state.trackTrace.length > 15000) state.trackTrace.shift();
       }
       break;
     }

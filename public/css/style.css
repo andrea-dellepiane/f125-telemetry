@@ -177,13 +177,41 @@ html, body {
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 5px 3px;
+  padding: 6px 4px;
   text-align: center;
+  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
-.sector-box.active { border-color: var(--yellow); box-shadow: 0 0 6px rgba(255,214,0,0.2); }
-.sector-box.done   { border-color: var(--green);  }
+.sector-box.active {
+  border-color: rgba(255,255,255,0.72);
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.16), 0 0 10px rgba(255,255,255,0.12);
+  transform: translateY(-1px);
+}
+.sector-box.sector-neutral { background: var(--surface-2); }
+.sector-box.sector-yellow  {
+  background: linear-gradient(180deg, rgba(255, 193, 7, 0.26), rgba(255, 193, 7, 0.08));
+  border-color: rgba(255, 213, 79, 0.72);
+}
+.sector-box.sector-green   {
+  background: linear-gradient(180deg, rgba(56, 217, 169, 0.24), rgba(56, 217, 169, 0.08));
+  border-color: rgba(56, 217, 169, 0.72);
+}
+.sector-box.sector-purple  {
+  background: linear-gradient(180deg, rgba(171, 71, 188, 0.28), rgba(171, 71, 188, 0.1));
+  border-color: rgba(206, 147, 216, 0.78);
+  box-shadow: 0 0 12px rgba(171, 71, 188, 0.18);
+}
 .sector-label { display: block; font-size: 9px; color: var(--text-dim); letter-spacing: 1px; }
 .sector-time  { display: block; font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.sector-delta {
+  display: block;
+  margin-top: 3px;
+  font-size: 9px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.sector-delta.delta-faster  { color: #38d9a9; }
+.sector-delta.delta-slower  { color: #ffd43b; }
+.sector-delta.delta-neutral { color: var(--text-dim); }
 
 /* ── Car Stats Row (in timing card) ─────────────────────────────────────── */
 .car-stats-row {

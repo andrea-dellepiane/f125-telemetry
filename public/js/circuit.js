@@ -14,7 +14,7 @@
   const TRACE_GLOW_WIDTH = 10;
   const VIEWPORT_PADDING = 18;
   const TRACE_SAMPLE_STEP = 2.2;
-  const MAX_TRACE_POINTS = 12000;
+  const ENABLE_TRACE_AUTO_FILTER = false;
   const MIN_POINT_STEP = 0.9;
   const MIN_TRACE_POINTS_FOR_MASK = 240;
   const MIN_TRACE_LENGTH_FOR_MASK = 900;
@@ -115,9 +115,41 @@
     canvas.height = wrap.clientHeight || 480;
   }
 
-  function updateTrace(points) {
-    if (!Array.isArray(points)) return;
-    rawTrace = simplifyTrace(points).slice(-MAX_TRACE_POINTS);
+  function updateTrace(payload) {
+    if (Array.isArray(payload)) {
+      rawTrace = simplifyTrace(payload);
+      traceDirty = true;
+      return;
+    }
+
+    if (!payload || typeof payload !== 'object') return;
+
+    if (payload.mode === 'append') {
+      appendTracePoints(payload.points);
+      traceDirty = true;
+      return;
+    }
+
+    if (payload.mode === 'replace') {
+      rawTrace = simplifyTrace(payload.points || []);
+      traceDirty = true;
+      return;
+    }
+  }
+
+  function appendTracePoints(points) {
+    if (!Array.isArray(points) || !points.length) return;
+    let lastKept = rawTrace[rawTrace.length - 1] || null;
+
+    points.forEach((point) => {
+      if (!point || !isFiniteNumber(point.x) || !isFiniteNumber(point.z)) return;
+      const clean = { x: point.x, z: point.z };
+      if (!lastKept || distance(lastKept, clean) >= TRACE_SAMPLE_STEP) {
+        rawTrace.push(clean);
+        lastKept = clean;
+      }
+    });
+
     traceDirty = true;
   }
 
@@ -198,7 +230,7 @@
   }
 
   function rebuildTraceGeometry() {
-    const source = rawTrace.slice(-MAX_TRACE_POINTS);
+    const source = rawTrace;
     traceSegments = [];
     acceptedTracePoints = [];
     trackFilterReady = false;
@@ -231,7 +263,7 @@
     bbReady = coarsePoints.length >= 2;
     chooseViewTransform(coarsePoints.length >= 2 ? coarsePoints : source);
 
-    const canUseMask = isMaskFilteringReady(coarsePoints, coarseBounds);
+    const canUseMask = ENABLE_TRACE_AUTO_FILTER && isMaskFilteringReady(coarsePoints, coarseBounds);
     if (!canUseMask) {
       traceSegments = coarseSegments;
       acceptedTracePoints = coarsePoints;
@@ -768,7 +800,7 @@
       return;
     }
 
-    const status = trackFilterReady ? 'Auto-clean pista attivo' : 'Sto costruendo il tracciato';
+    const status = trackFilterReady ? 'Filtro pista attivo' : 'Tracciato live completo';
     ctx.fillText(status, 16, 14);
   }
 

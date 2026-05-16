@@ -65,6 +65,7 @@
     wet:     { ideal: 18, max: 24 },
     default: { ideal: 18, max: 24 },
   };
+  const SECTOR_COUNT = 3;
 
   // ── State ──────────────────────────────────────────────────────────────────
   let bestLapMs = Infinity;
@@ -79,6 +80,20 @@
   let latestParticipants = [];
   let bestLapByCarIndex = {};
   let playerCarIndex = 0;
+  let sectorDisplayState = Array.from({ length: SECTOR_COUNT }, () => ({
+    timeMs: 0,
+    deltaMs: null,
+    colour: 'neutral',
+  }));
+  let playerBestSectorMs = Array(SECTOR_COUNT).fill(Infinity);
+  let sessionBestSectorMs = Array(SECTOR_COUNT).fill(Infinity);
+  let playerCurrentLapSectorMs = Array(SECTOR_COUNT).fill(0);
+  let lastCompletedPlayerLapSectorMs = null;
+  let playerSectorCommitLapNums = Array(SECTOR_COUNT).fill(0);
+  let lastProcessedPlayerCompletedLap = 0;
+  let observedCarSectorMs = {};
+  let observedCarCompletedLap = {};
+  let latestTrackTraceLength = 0;
 
   // ── DOM helpers ───────────────────────────────────────────────────────────
   function $(id)       { return document.getElementById(id); }
@@ -106,6 +121,140 @@
     const s = Math.floor(total / 1000);
     const m = total % 1000;
     return `${s}.${String(m).padStart(3,'0')}`;
+  }
+
+  function sectorTotalMs(ms, mins) {
+    if (!ms || ms <= 0) return 0;
+    return ((mins || 0) * 60000) + ms;
+  }
+
+  function deriveSector3Ms(lapTimeMs, sector1Ms, sector2Ms) {
+    if (lapTimeMs <= 0 || sector1Ms <= 0 || sector2Ms <= 0) return 0;
+    const sector3Ms = lapTimeMs - sector1Ms - sector2Ms;
+    return sector3Ms > 0 ? sector3Ms : 0;
+  }
+
+  function formatSectorDelta(deltaMs) {
+    if (!Number.isFinite(deltaMs)) return 'vs giro prec. –';
+    const sign = deltaMs > 0 ? '+' : deltaMs < 0 ? '-' : '';
+    return `vs giro prec. ${sign}${(Math.abs(deltaMs) / 1000).toFixed(3)}s`;
+  }
+
+  function getSectorDeltaClass(deltaMs) {
+    if (!Number.isFinite(deltaMs) || deltaMs === 0) return 'delta-neutral';
+    return deltaMs < 0 ? 'delta-faster' : 'delta-slower';
+  }
+
+  function updateSectorBest(bestArray, index, timeMs) {
+    if (!timeMs || timeMs <= 0) return;
+    bestArray[index] = Math.min(bestArray[index], timeMs);
+  }
+
+  function renderSectorBoxes(activeSector) {
+    sectorDisplayState.forEach((state, index) => {
+      const box = $(`s${index + 1}-box`);
+      const timeEl = $(`s${index + 1}-time`);
+      const deltaEl = $(`s${index + 1}-delta`);
+      if (timeEl) timeEl.textContent = state.timeMs > 0 ? msSector(state.timeMs, 0) : '–';
+      if (deltaEl) {
+        deltaEl.textContent = formatSectorDelta(state.deltaMs);
+        deltaEl.className = `sector-delta ${getSectorDeltaClass(state.deltaMs)}`;
+      }
+      if (!box) return;
+      box.classList.remove('active', 'sector-neutral', 'sector-yellow', 'sector-green', 'sector-purple');
+      box.classList.add(`sector-${state.colour || 'neutral'}`);
+      if (index === activeSector) box.classList.add('active');
+    });
+  }
+
+  function resetSectorTimingState() {
+    sectorDisplayState = Array.from({ length: SECTOR_COUNT }, () => ({
+      timeMs: 0,
+      deltaMs: null,
+      colour: 'neutral',
+    }));
+    playerBestSectorMs = Array(SECTOR_COUNT).fill(Infinity);
+    sessionBestSectorMs = Array(SECTOR_COUNT).fill(Infinity);
+    playerCurrentLapSectorMs = Array(SECTOR_COUNT).fill(0);
+    lastCompletedPlayerLapSectorMs = null;
+    playerSectorCommitLapNums = Array(SECTOR_COUNT).fill(0);
+    lastProcessedPlayerCompletedLap = 0;
+    observedCarSectorMs = {};
+    observedCarCompletedLap = {};
+    renderSectorBoxes(0);
+  }
+
+  function classifySectorColour(index, timeMs) {
+    const previousSessionBest = sessionBestSectorMs[index];
+    const previousPlayerBest = playerBestSectorMs[index];
+
+    if (!Number.isFinite(previousSessionBest) || timeMs <= previousSessionBest) return 'purple';
+    if (!Number.isFinite(previousPlayerBest) || timeMs <= previousPlayerBest) return 'green';
+    return 'yellow';
+  }
+
+  function applyPlayerSector(index, timeMs, lapNum) {
+    if (!timeMs || timeMs <= 0) return;
+    const previousLapTime = lastCompletedPlayerLapSectorMs && lastCompletedPlayerLapSectorMs[index] > 0
+      ? lastCompletedPlayerLapSectorMs[index]
+      : null;
+    sectorDisplayState[index] = {
+      timeMs,
+      deltaMs: Number.isFinite(previousLapTime) ? timeMs - previousLapTime : null,
+      colour: classifySectorColour(index, timeMs),
+    };
+    updateSectorBest(playerBestSectorMs, index, timeMs);
+    updateSectorBest(sessionBestSectorMs, index, timeMs);
+    playerSectorCommitLapNums[index] = lapNum || 0;
+  }
+
+  function finalizePlayerLap(completedLapNum, lapTimeMs) {
+    const sector1Ms = playerCurrentLapSectorMs[0];
+    const sector2Ms = playerCurrentLapSectorMs[1];
+    const sector3Ms = deriveSector3Ms(lapTimeMs, sector1Ms, sector2Ms);
+    const completedSectors = [sector1Ms, sector2Ms, sector3Ms];
+
+    completedSectors.forEach((timeMs, index) => {
+      if (!timeMs || timeMs <= 0) return;
+      if (playerSectorCommitLapNums[index] !== completedLapNum || index === 2) {
+        applyPlayerSector(index, timeMs, completedLapNum);
+      }
+    });
+
+    lastCompletedPlayerLapSectorMs = completedSectors;
+    playerCurrentLapSectorMs = Array(SECTOR_COUNT).fill(0);
+    lastProcessedPlayerCompletedLap = completedLapNum;
+  }
+
+  function observeOtherCarsSectorBenchmarks(cars) {
+    (cars || []).forEach((car) => {
+      if (!car || car.carIndex === playerCarIndex) return;
+      const sector1Ms = sectorTotalMs(car.sector1TimeInMS, car.sector1TimeMinutes);
+      const sector2Ms = sectorTotalMs(car.sector2TimeInMS, car.sector2TimeMinutes);
+      const liveSectors = observedCarSectorMs[car.carIndex] || [0, 0];
+
+      if (sector1Ms > 0) {
+        liveSectors[0] = sector1Ms;
+        updateSectorBest(sessionBestSectorMs, 0, sector1Ms);
+      }
+
+      if (sector2Ms > 0) {
+        liveSectors[1] = sector2Ms;
+        updateSectorBest(sessionBestSectorMs, 1, sector2Ms);
+      }
+
+      const completedLapNum = Math.max(0, (car.currentLapNum || 1) - 1);
+      const lastLapTimeMs = car.lastLapTimeInMS || 0;
+
+      if (lastLapTimeMs > 0 && completedLapNum > (observedCarCompletedLap[car.carIndex] || 0)) {
+        updateSectorBest(sessionBestSectorMs, 2, deriveSector3Ms(lastLapTimeMs, liveSectors[0], liveSectors[1]));
+        observedCarCompletedLap[car.carIndex] = completedLapNum;
+        observedCarSectorMs[car.carIndex] = [0, 0];
+        return;
+      }
+
+      observedCarSectorMs[car.carIndex] = liveSectors;
+    });
   }
 
   // ── Tyre temp → colour ─────────────────────────────────────────────────────
@@ -451,6 +600,23 @@
 
   // ── Handlers ──────────────────────────────────────────────────────────────
   function handleSession(d) {
+    const previousSession = latestSession || {};
+    const trackChanged =
+      Number.isInteger(d.trackId) &&
+      previousSession.trackId !== d.trackId;
+    const sessionTypeChanged =
+      Number.isInteger(d.sessionType) &&
+      previousSession.sessionType !== d.sessionType;
+    const sessionRestarted =
+      typeof d.sessionTimeLeft === 'number' &&
+      typeof previousSession.sessionTimeLeft === 'number' &&
+      previousSession.sessionTimeLeft > 0 &&
+      d.sessionTimeLeft > previousSession.sessionTimeLeft + 20;
+
+    if (trackChanged || sessionTypeChanged || sessionRestarted) {
+      resetSectorTimingState();
+    }
+
     latestSession = d || {};
     syncPlayerCarIndex(d);
     const track   = TRACK_NAMES[d.trackId] ?? `Track ${d.trackId}`;
@@ -481,6 +647,7 @@
     syncPlayerCarIndex(d);
     if (Array.isArray(d.cars)) {
       latestAllLapData = d.cars;
+      observeOtherCarsSectorBenchmarks(d.cars);
       refreshLeaderboard();
     }
 
@@ -495,19 +662,29 @@
     }
     text('best-lap-time', msToLapTime(bestLapMs < Infinity ? bestLapMs : 0));
 
-    const s1El = $('s1-box'), s2El = $('s2-box'), s3El = $('s3-box');
-    const sector = lap.sector || 0;
+    const sector = clamp(lap.sector || 0, 0, 2);
+    const currentLapNum = lap.currentLapNum || 1;
+    const completedLapNum = Math.max(0, currentLapNum - 1);
+    const previousSector1Ms = playerCurrentLapSectorMs[0];
+    const previousSector2Ms = playerCurrentLapSectorMs[1];
+    const sector1Ms = sectorTotalMs(lap.sector1TimeInMS, lap.sector1TimeMinutes);
+    const sector2Ms = sectorTotalMs(lap.sector2TimeInMS, lap.sector2TimeMinutes);
 
-    text('s1-time', lap.sector1TimeInMS > 0 ? msSector(lap.sector1TimeInMS, lap.sector1TimeMinutes) : '–');
-    text('s2-time', lap.sector2TimeInMS > 0 ? msSector(lap.sector2TimeInMS, lap.sector2TimeMinutes) : '–');
-    text('s3-time', '–');
+    if (lap.lastLapTimeInMS > 0 && completedLapNum > lastProcessedPlayerCompletedLap) {
+      finalizePlayerLap(completedLapNum, lap.lastLapTimeInMS);
+    }
 
-    [s1El, s2El, s3El].forEach((el, i) => {
-      if (!el) return;
-      el.classList.remove('active', 'done');
-      if (i === sector) el.classList.add('active');
-      else if (i < sector) el.classList.add('done');
-    });
+    if (sector1Ms > 0) {
+      playerCurrentLapSectorMs[0] = sector1Ms;
+      if (sector1Ms !== previousSector1Ms) applyPlayerSector(0, sector1Ms, currentLapNum);
+    }
+
+    if (sector2Ms > 0) {
+      playerCurrentLapSectorMs[1] = sector2Ms;
+      if (sector2Ms !== previousSector2Ms) applyPlayerSector(1, sector2Ms, currentLapNum);
+    }
+
+    renderSectorBoxes(sector);
 
     const lapCounter = $('lap-counter');
     if (lapCounter) {
@@ -643,7 +820,30 @@
   }
 
   function handleTrackTrace(pts) {
-    CircuitMap.updateTrace(pts);
+    if (Array.isArray(pts)) {
+      latestTrackTraceLength = pts.length;
+      CircuitMap.updateTrace(pts);
+      return;
+    }
+
+    if (!pts || typeof pts !== 'object') return;
+
+    if (pts.mode === 'replace') {
+      latestTrackTraceLength = Number.isInteger(pts.totalLength)
+        ? pts.totalLength
+        : Array.isArray(pts.points) ? pts.points.length : 0;
+      CircuitMap.updateTrace(pts);
+      return;
+    }
+
+    if (pts.mode === 'append') {
+      const start = Number.isInteger(pts.start) ? pts.start : latestTrackTraceLength;
+      if (start < latestTrackTraceLength) return;
+      latestTrackTraceLength = Number.isInteger(pts.totalLength)
+        ? pts.totalLength
+        : start + (Array.isArray(pts.points) ? pts.points.length : 0);
+      CircuitMap.updateTrace(pts);
+    }
   }
 
   function handleParticipants(data) {
@@ -660,6 +860,7 @@
   function handleAllLapData(data) {
     latestAllLapData = (data && data.cars) ? data.cars : data;
     syncPlayerCarIndex(data);
+    observeOtherCarsSectorBenchmarks(latestAllLapData);
     refreshLeaderboard();
     updatePitStrategy();
   }
